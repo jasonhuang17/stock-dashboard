@@ -4,6 +4,7 @@ Groups: 個股 / 槓桿型 / 大盤型
 Data:   yfinance (30s cache, ~15s Yahoo Finance delay)
 Clock:  JS ticks every second; page data refreshes every 30s
 """
+import math
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -22,21 +23,35 @@ _DEFAULT_GROUPS = {
     "🌐 大盤型": ["VOO", "SPY", "QQQ"],
 }
 
+_EMPTY_PORTFOLIO = {
+    "複委託（台幣戶）": {"currency": "USD", "positions": {}},
+    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+    "台股帳戶":         {"currency": "TWD", "positions": {}},
+}
+
 def load_config():
     try:
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
-        # Support both old format (group names as top-level keys) and new format
         if "group_tickers" in data:
-            raw = data["group_tickers"]
-            portfolio = data.get("portfolio", {})
+            raw          = data["group_tickers"]
+            raw_portfolio = data.get("portfolio", {})
         else:
-            raw = data
-            portfolio = {}
+            raw          = data
+            raw_portfolio = {}
         groups = {k: raw.get(k, list(v)) for k, v in _DEFAULT_GROUPS.items()}
-        return groups, portfolio
+        # Auto-migrate old flat format {"TICKER": {"shares":N,"avg_cost":X}}
+        if raw_portfolio and "複委託（台幣戶）" not in raw_portfolio:
+            first = next(iter(raw_portfolio.values()), {})
+            if isinstance(first, dict) and "shares" in first:
+                raw_portfolio = {
+                    "複委託（台幣戶）": {"currency": "USD", "positions": raw_portfolio},
+                    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+                    "台股帳戶":         {"currency": "TWD", "positions": {}},
+                }
+        return groups, raw_portfolio or _EMPTY_PORTFOLIO
     except (FileNotFoundError, json.JSONDecodeError):
-        return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, {}
+        return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, _EMPTY_PORTFOLIO
 
 def save_config(group_tickers: dict, portfolio: dict):
     try:
@@ -74,6 +89,17 @@ if "group_tickers" not in st.session_state:
 elif "portfolio" not in st.session_state:
     _, _cfg_portfolio = load_config()
     st.session_state.portfolio = _cfg_portfolio
+
+# Migrate in-session portfolio to multi-account format if still in old flat format
+_port = st.session_state.portfolio
+if _port and "複委託（台幣戶）" not in _port:
+    _first = next(iter(_port.values()), {})
+    if isinstance(_first, dict) and "shares" in _first:
+        st.session_state.portfolio = {
+            "複委託（台幣戶）": {"currency": "USD", "positions": dict(_port)},
+            "複委託（美金戶）": {"currency": "USD", "positions": {}},
+            "台股帳戶":         {"currency": "TWD", "positions": {}},
+        }
 
 # ── Stock groups — edit here to customize ────────────────────────────────────
 GROUPS = {
@@ -376,6 +402,41 @@ def fetch_premarket(tickers: tuple):
     return out
 
 
+@st.cache_data(ttl=300)
+def _ticker_exists(ticker: str) -> bool:
+    try:
+        df = yf.download(ticker, period="5d", interval="1d", progress=False)
+        return not df.empty
+    except Exception:
+        return False
+
+
+@st.cache_data(ttl=300)
+def _resolve_tw_ticker(bare: str) -> str:
+    """Resolve a bare TW ticker to its full yfinance symbol (tries .TW then .TWO)."""
+    for suffix in (".TW", ".TWO"):
+        try:
+            df = yf.download(bare + suffix, period="2d", interval="1d", progress=False)
+            if not df.empty:
+                return bare + suffix
+        except Exception:
+            pass
+    return bare + ".TW"
+
+
+@st.cache_data(ttl=300)
+def _ticker_exists_tw(bare: str) -> bool:
+    """Check if a bare TW ticker exists on Yahoo Finance (.TW or .TWO)."""
+    for suffix in (".TW", ".TWO"):
+        try:
+            df = yf.download(bare + suffix, period="2d", interval="1d", progress=False)
+            if not df.empty:
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def card_html(t, price, pct):
     if price is None:
         return (f'<div class="stock-card">'
@@ -600,6 +661,548 @@ def bar_chart(results):
     return fig
 
 
+# ── Portfolio helper functions ─────────────────────────────────────────────────
+
+_ACCT_MAP = [
+    ("複委託（台幣戶）", "USD"),
+    ("複委託（美金戶）", "USD"),
+    ("台股帳戶",         "TWD"),
+]
+
+
+def _fmt_cost(val, currency):
+    return f"NT${val:.2f}" if currency == "TWD" else f"${val:.3f}"
+
+
+def _portfolio_rows(acct_key):
+    positions = (st.session_state.portfolio
+                 .get(acct_key, {})
+                 .get("positions", {}))
+    if not positions:
+        return []
+    is_twd = st.session_state.portfolio.get(acct_key, {}).get("currency") == "TWD"
+    if is_twd:
+        bare_to_full = {b: _resolve_tw_ticker(b) for b in positions}
+        quotes       = fetch_quotes(tuple(bare_to_full.values()))
+        full_to_bare = {v: k for k, v in bare_to_full.items()}
+        quote_map    = {full_to_bare.get(q["ticker"], q["ticker"]): q for q in quotes}
+    else:
+        quotes    = fetch_quotes(tuple(positions.keys()))
+        quote_map = {q["ticker"]: q for q in quotes}
+    rows = []
+    for ticker, pos in positions.items():
+        q        = quote_map.get(ticker, {})
+        price    = q.get("price")
+        pct      = q.get("pct")
+        shares   = pos["shares"]
+        avg_cost = pos["avg_cost"]
+        if price is not None and pct is not None:
+            prev_close  = price / (1 + pct / 100)
+            per_share   = price - prev_close
+            today_gain  = per_share * shares
+            unreal_gain = (price - avg_cost) * shares
+            unreal_pct  = (price - avg_cost) / avg_cost * 100 if avg_cost else 0.0
+        else:
+            prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
+        rows.append({
+            "ticker": ticker, "shares": shares, "avg_cost": avg_cost,
+            "price": price, "pct": pct, "prev_close": prev_close,
+            "per_share": per_share, "today_gain": today_gain,
+            "unreal_gain": unreal_gain, "unreal_pct": unreal_pct,
+        })
+    return rows
+
+
+def _render_pnl_table(rows, currency):
+    cost_lbl = "成本 (NT$)" if currency == "TWD" else "成本 (USD)"
+    gain_sfx = " (TWD)"    if currency == "TWD" else " (USD)"
+
+    st.markdown(f"""
+    <div style='display:grid;
+        grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
+        font-family:Courier New;font-size:0.68rem;color:#4a6a8a;
+        padding:4px 8px 6px;border-bottom:1px solid rgba(8,120,164,0.25);
+        margin-bottom:6px;'>
+      <span>代號</span><span>股數</span><span>{cost_lbl}</span>
+      <span>現價</span><span>單股漲跌</span>
+      <span>今日損益{gain_sfx}</span><span>未實現損益</span>
+    </div>""", unsafe_allow_html=True)
+
+    total_today = total_prev_mv = total_unreal = 0.0
+    has_data = False
+
+    for r in rows:
+        if r["price"] is None:
+            price_str = single_str = today_str = unreal_str = "N/A"
+            single_cls = today_cls = unreal_cls = "neu"
+        else:
+            has_data = True
+            ps       = r["per_share"]
+            ps_sign  = "+" if ps >= 0 else ""
+            pct_sign = "+" if r["pct"] >= 0 else ""
+            t_sign   = "+" if r["today_gain"] >= 0 else ""
+            u_sign   = "+" if r["unreal_gain"] >= 0 else ""
+            if currency == "TWD":
+                price_str  = f"NT${r['price']:,.2f}"
+                single_str = (f"{ps_sign}NT${abs(ps):.2f} "
+                              f"({pct_sign}{r['pct']:.2f}%)")
+                today_str  = f"{t_sign}NT${abs(r['today_gain']):,.0f}"
+                unreal_str = (f"{u_sign}NT${abs(r['unreal_gain']):,.0f} "
+                              f"({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)")
+            else:
+                price_str  = f"${r['price']:,.2f}"
+                single_str = (f"{ps_sign}${abs(ps):.3f} "
+                              f"({pct_sign}{r['pct']:.2f}%)")
+                today_str  = f"{t_sign}${abs(r['today_gain']):,.2f}"
+                unreal_str = (f"{u_sign}${abs(r['unreal_gain']):,.2f} "
+                              f"({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)")
+            single_cls = "pos" if ps >= 0 else "neg"
+            today_cls  = "pos" if r["today_gain"] >= 0 else "neg"
+            unreal_cls = "pos" if r["unreal_gain"] >= 0 else "neg"
+            total_today   += r["today_gain"]
+            total_prev_mv += r["prev_close"] * r["shares"]
+            total_unreal  += r["unreal_gain"]
+
+        st.markdown(f"""
+        <div style='display:grid;
+            grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
+            font-family:Courier New;font-size:0.82rem;
+            padding:6px 8px;
+            background:linear-gradient(135deg,rgba(0,61,115,0.3),rgba(8,120,164,0.06));
+            border:1px solid rgba(8,120,164,0.2);border-radius:7px;margin-bottom:4px;'>
+          <span style='color:#1ECFD6;font-weight:800;'>{r["ticker"]}</span>
+          <span style='color:#d4eaf5;'>{r["shares"]:g}</span>
+          <span style='color:#d4eaf5;'>{_fmt_cost(r["avg_cost"], currency)}</span>
+          <span style='color:#d4eaf5;'>{price_str}</span>
+          <span class='{single_cls}'>{single_str}</span>
+          <span class='{today_cls}'>{today_str}</span>
+          <span class='{unreal_cls}'>{unreal_str}</span>
+        </div>""", unsafe_allow_html=True)
+
+    return total_today, total_prev_mv, total_unreal, has_data
+
+
+def _render_summary_bar(total_today, total_prev_mv, total_unreal, currency):
+    total_pct = (total_today / total_prev_mv * 100) if total_prev_mv else 0
+    t_sign = "+" if total_today >= 0 else ""
+    u_sign = "+" if total_unreal >= 0 else ""
+    t_cls  = "pos" if total_today >= 0 else "neg"
+    u_cls  = "pos" if total_unreal >= 0 else "neg"
+    if currency == "TWD":
+        t_fmt = f"NT${abs(total_today):,.0f}"
+        u_fmt = f"NT${abs(total_unreal):,.0f}"
+    else:
+        t_fmt = f"${abs(total_today):,.2f}"
+        u_fmt = f"${abs(total_unreal):,.2f}"
+    tp_sign = "+" if total_pct >= 0 else ""
+    st.markdown(f"""
+    <div style='font-family:Courier New;font-size:0.88rem;
+        padding:10px 14px;
+        background:rgba(0,29,58,0.6);
+        border:1px solid rgba(8,120,164,0.35);border-radius:8px;
+        display:flex;gap:40px;align-items:center;'>
+      <span style='color:#4a6a8a;'>今日總損益</span>
+      <span class='{t_cls}' style='font-weight:800;font-size:1rem;'>
+        {t_sign}{t_fmt}
+      </span>
+      <span class='{t_cls}'>({tp_sign}{total_pct:.2f}%)</span>
+      <span style='color:#2d4a6a;margin-left:auto;font-size:0.75rem;'>未實現總損益</span>
+      <span class='{u_cls}' style='font-size:0.88rem;'>{u_sign}{u_fmt}</span>
+    </div>""", unsafe_allow_html=True)
+
+
+def _draw_bubble(rows, currency, key):
+    br       = [r for r in rows if r["price"] is not None]
+    if not br:
+        return
+    b_x      = [r["pct"]               for r in br]
+    b_y      = [r["today_gain"]        for r in br]
+    b_labels = [r["ticker"]            for r in br]
+    b_mv     = [r["price"]*r["shares"] for r in br]
+    b_colors = ["#C05640" if p >= 0 else "#3DAA70" for p in b_x]
+    max_mv   = max(b_mv) or 1
+    b_sizes  = [max(math.sqrt(mv / max_mv) * 140, 24) for mv in b_mv]
+    cur_sym  = "NT$" if currency == "TWD" else "$"
+    tick_fmt = ",.0f" if currency == "TWD" else ",.2f"
+    hover = [
+        (f"<b>{r['ticker']}</b><br>"
+         f"今日%：{'+' if r['pct']>=0 else ''}{r['pct']:.2f}%<br>"
+         f"今日損益：{'+' if r['today_gain']>=0 else ''}{cur_sym}{abs(r['today_gain']):,.2f}<br>"
+         f"持倉市值：{cur_sym}{r['price']*r['shares']:,.2f}")
+        for r in br
+    ]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=b_x, y=b_y, mode="markers+text",
+        marker=dict(size=b_sizes, color=b_colors, opacity=0.82,
+                    line=dict(color="rgba(30,207,214,0.4)", width=1.5)),
+        text=b_labels, textposition="middle center",
+        textfont=dict(color=[contrast_text(c) for c in b_colors],
+                      size=12, family="Courier New", weight="bold"),
+        hovertext=hover, hoverinfo="text",
+    ))
+    fig.add_hline(y=0, line=dict(color="rgba(8,120,164,0.5)", width=1, dash="dot"))
+    fig.add_vline(x=0, line=dict(color="rgba(8,120,164,0.5)", width=1, dash="dot"))
+    fig.update_layout(
+        xaxis=dict(title="今日漲跌%",
+                   title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   tickformat=".2f", ticksuffix="%",
+                   tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   gridcolor="rgba(8,120,164,0.12)", zeroline=False),
+        yaxis=dict(title=f"今日損益 ({currency})",
+                   title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   tickprefix=cur_sym, tickformat=tick_fmt,
+                   tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   gridcolor="rgba(8,120,164,0.12)", zeroline=False),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,29,58,0.4)",
+        height=420, margin=dict(l=60, r=20, t=36, b=50), showlegend=False,
+        title=dict(text="◈ 今日損益氣泡圖  （氣泡大小 = 持倉市值）",
+                   font=dict(color="#1ECFD6", size=11, family="Courier New"), x=0.5),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
+
+
+def _draw_waterfall(rows, currency, key):
+    br = sorted([r for r in rows if r["price"] is not None],
+                key=lambda r: r["today_gain"], reverse=True)
+    if not br:
+        return
+    cur_sym = "NT$" if currency == "TWD" else "$"
+    dec     = 0 if currency == "TWD" else 2
+    tickers = [r["ticker"] for r in br]
+    gains   = [r["today_gain"] for r in br]
+    txt     = [f"{'+' if g>=0 else ''}{cur_sym}{abs(g):,.{dec}f}" for g in gains]
+    fig = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=["relative"] * len(tickers) + ["total"],
+        x=tickers + ["合計"],
+        y=gains + [None],
+        connector={"line": {"color": "rgba(8,120,164,0.3)", "width": 1, "dash": "dot"}},
+        increasing={"marker": {"color": "#C05640", "line": {"width": 0}}},
+        decreasing={"marker": {"color": "#3DAA70", "line": {"width": 0}}},
+        totals={"marker":    {"color": "#EDD170",  "line": {"width": 0}}},
+        text=txt + [""], textposition="outside",
+        textfont=dict(color="#d4eaf5", size=11, family="Courier New"),
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,29,58,0.4)",
+        height=400, margin=dict(l=20, r=20, t=40, b=30),
+        yaxis=dict(title=f"今日損益 ({currency})",
+                   title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   tickprefix=cur_sym,
+                   tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   gridcolor="rgba(8,120,164,0.12)",
+                   zeroline=True, zerolinecolor="rgba(8,120,164,0.5)", zerolinewidth=1),
+        xaxis=dict(tickfont=dict(color="#d4eaf5", size=12,
+                                 family="Courier New", weight="bold")),
+        showlegend=False,
+        title=dict(text="◈ 今日損益瀑布圖",
+                   font=dict(color="#1ECFD6", size=11, family="Courier New"), x=0.5),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
+
+
+def _draw_treemap(rows, currency, key):
+    br = [r for r in rows if r["price"] is not None]
+    if not br:
+        return
+    cur_sym = "NT$" if currency == "TWD" else "$"
+    dec     = 0 if currency == "TWD" else 2
+    tickers  = [r["ticker"]            for r in br]
+    mv       = [r["price"]*r["shares"] for r in br]
+    pcts     = [r["pct"]               for r in br]
+    gains    = [r["today_gain"]        for r in br]
+    fig = go.Figure(go.Treemap(
+        labels=tickers, parents=[""] * len(tickers), values=mv,
+        customdata=list(zip(pcts, gains)),
+        texttemplate="<b>%{label}</b><br>%{customdata[0]:+.2f}%",
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            f"今日漲跌: %{{customdata[0]:+.2f}}%<br>"
+            f"今日損益: {cur_sym}%{{customdata[1]:,.{dec}f}}<br>"
+            f"持倉市值: {cur_sym}%{{value:,.{dec}f}}"
+            "<extra></extra>"
+        ),
+        marker=dict(
+            colors=pcts,
+            colorscale=[[0, "#3DAA70"], [0.5, "#0d2a42"], [1, "#C05640"]],
+            cmid=0, showscale=False,
+            line=dict(color="#001d3a", width=2),
+        ),
+        textfont=dict(color="#ffffff", size=13, family="Courier New"),
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        height=400, margin=dict(l=0, r=0, t=40, b=0),
+        title=dict(text="◈ 持倉熱力圖  （大小＝市值，顏色＝漲跌%）",
+                   font=dict(color="#1ECFD6", size=11, family="Courier New"), x=0.5),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
+
+
+def _draw_bar_pnl(rows, currency, key):
+    br = sorted([r for r in rows if r["price"] is not None],
+                key=lambda r: r["today_gain"])
+    if not br:
+        return
+    cur_sym = "NT$" if currency == "TWD" else "$"
+    dec     = 0 if currency == "TWD" else 2
+    tickers = [r["ticker"]     for r in br]
+    gains   = [r["today_gain"] for r in br]
+    colors  = ["#C05640" if g >= 0 else "#3DAA70" for g in gains]
+    txt     = [f"{'+' if g>=0 else ''}{cur_sym}{abs(g):,.{dec}f}" for g in gains]
+    fig = go.Figure(go.Bar(
+        x=gains, y=tickers, orientation="h",
+        marker=dict(color=colors, line=dict(width=0)),
+        text=txt, textposition="outside",
+        textfont=dict(color="#d4eaf5", size=11, family="Courier New"),
+        hovertemplate="<b>%{y}</b>  %{text}<extra></extra>",
+    ))
+    fig.add_vline(x=0, line=dict(color="rgba(8,120,164,0.6)", width=1.5))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,29,58,0.4)",
+        height=max(280, len(br) * 52 + 80),
+        margin=dict(l=20, r=110, t=40, b=30),
+        xaxis=dict(title=f"今日損益 ({currency})",
+                   title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   tickprefix=cur_sym,
+                   tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
+                   gridcolor="rgba(8,120,164,0.12)", zeroline=False),
+        yaxis=dict(tickfont=dict(color="#1ECFD6", size=12,
+                                 family="Courier New", weight="bold"),
+                   gridcolor="rgba(8,120,164,0.1)"),
+        showlegend=False,
+        title=dict(text="◈ 今日損益長條圖",
+                   font=dict(color="#1ECFD6", size=11, family="Courier New"), x=0.5),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=key)
+
+
+def _render_pnl_chart(rows, currency, key_prefix="chart"):
+    if not any(r["price"] is not None for r in rows):
+        return
+    chart_type = st.radio(
+        "圖表類型",
+        ["氣泡圖", "瀑布圖", "樹狀圖", "長條圖"],
+        horizontal=True,
+        key=f"{key_prefix}_type",
+    )
+    fig_key = f"{key_prefix}_fig"
+    if chart_type == "氣泡圖":
+        _draw_bubble(rows, currency, key=fig_key)
+    elif chart_type == "瀑布圖":
+        _draw_waterfall(rows, currency, key=fig_key)
+    elif chart_type == "樹狀圖":
+        _draw_treemap(rows, currency, key=fig_key)
+    else:
+        _draw_bar_pnl(rows, currency, key=fig_key)
+
+
+def _render_manage_tab(acct_key, currency):
+    note = "新增持倉後自動儲存，重啟仍保留。"
+    if currency == "TWD":
+        note += " 輸入純代號即可（例如 2330），系統自動識別上市／上櫃。"
+    st.markdown(
+        f"<div style='font-family:Courier New;font-size:0.75rem;"
+        f"color:#4a6a8a;margin-bottom:10px;'>{note}</div>",
+        unsafe_allow_html=True,
+    )
+
+    n_key = f"port_add_n_{acct_key}"
+    if n_key not in st.session_state:
+        st.session_state[n_key] = 0
+    _n = st.session_state[n_key]
+
+    cost_label  = "平均成本 (NT$)" if currency == "TWD" else "平均成本 (USD)"
+    cost_fmt    = "%.2f"           if currency == "TWD" else "%.3f"
+    cost_step   = 0.01             if currency == "TWD" else 0.001
+    placeholder = "e.g. 2330 / 6488" if currency == "TWD" else "e.g. AAPL"
+
+    _ticker_key = f"port_ticker_{acct_key}_{_n}"
+    def _to_upper(_k=_ticker_key, _twd=(currency == "TWD")):
+        val = st.session_state[_k].upper()
+        if _twd:
+            val = val.removesuffix(".TWO").removesuffix(".TW")
+        st.session_state[_k] = val
+
+    a1, a2, a3, a4 = st.columns([2, 2, 2, 1])
+    with a1:
+        new_ticker = st.text_input("股票代號", placeholder=placeholder,
+                                   key=_ticker_key, on_change=_to_upper)
+    with a2:
+        new_shares = st.number_input("股數（整數）", min_value=0, step=1,
+                                     value=None,
+                                     key=f"port_shares_{acct_key}_{_n}")
+    with a3:
+        new_cost = st.number_input(cost_label, min_value=0.0, step=cost_step,
+                                   format=cost_fmt, value=None,
+                                   key=f"port_cost_{acct_key}_{_n}")
+    with a4:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _add_clicked = st.button("新增", key=f"port_add_{acct_key}", use_container_width=True)
+
+    if _add_clicked:
+        t = new_ticker.strip().upper()
+        if currency == "TWD":
+            t = t.removesuffix(".TWO").removesuffix(".TW")
+        _err = None
+        if not t:
+            _err = "請輸入股票代號"
+        elif new_shares is None or new_shares <= 0:
+            _err = "請輸入股數（需大於 0）"
+        elif new_cost is None or new_cost <= 0:
+            _err = "請輸入平均成本（需大於 0）"
+        elif currency == "TWD" and not _ticker_exists_tw(t):
+            _err = f"找不到台股代號「{t}」，請確認代號是否正確"
+        elif currency != "TWD" and not _ticker_exists(t):
+            _err = f"找不到股票代號「{t}」，請確認代號是否正確"
+        if _err:
+            st.error(_err)
+        else:
+            dec = 2 if currency == "TWD" else 3
+            st.session_state.portfolio[acct_key]["positions"][t] = {
+                "shares": int(new_shares), "avg_cost": round(float(new_cost), dec),
+            }
+            save_config(st.session_state.group_tickers, st.session_state.portfolio)
+            st.session_state[n_key] += 1
+            st.rerun()
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    positions = st.session_state.portfolio.get(acct_key, {}).get("positions", {})
+    if not positions:
+        st.markdown(
+            "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
+            "尚無持倉，請在上方新增。</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    edit_key = f"editing_port_{acct_key}"
+    _editing = st.session_state.get(edit_key)
+    _COLS    = [1.4, 1.4, 1.8, 0.8, 0.8]
+    cost_hdr = "平均成本 (NT$)" if currency == "TWD" else "平均成本 (USD)"
+    hc = st.columns(_COLS)
+    for col, label in zip(hc, ["代號", "股數", cost_hdr, "", ""]):
+        col.markdown(
+            f"<div style='font-family:Courier New;font-size:0.7rem;color:#4a6a8a;'>{label}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid rgba(8,120,164,0.25);margin:4px 0 6px;'>",
+        unsafe_allow_html=True,
+    )
+
+    for ticker, pos in list(positions.items()):
+        is_edit = (_editing == ticker)
+        c1, c2, c3, c4, c5 = st.columns(_COLS)
+        with c1:
+            st.markdown(
+                f"<div style='font-family:Courier New;font-weight:700;"
+                f"color:#1ECFD6;font-size:0.9rem;padding-top:8px;'>{ticker}</div>",
+                unsafe_allow_html=True,
+            )
+        if is_edit:
+            with c2:
+                edited_shares = st.number_input(
+                    "股數", min_value=0, step=1, value=int(pos["shares"]),
+                    key=f"edit_shares_{acct_key}_{ticker}", label_visibility="collapsed",
+                )
+            with c3:
+                edited_cost = st.number_input(
+                    "成本", min_value=0.0, step=cost_step, format=cost_fmt,
+                    value=float(pos["avg_cost"]),
+                    key=f"edit_cost_{acct_key}_{ticker}", label_visibility="collapsed",
+                )
+            with c4:
+                if st.button("儲存", key=f"port_save_{acct_key}_{ticker}", use_container_width=True):
+                    dec = 2 if currency == "TWD" else 3
+                    st.session_state.portfolio[acct_key]["positions"][ticker] = {
+                        "shares": int(edited_shares),
+                        "avg_cost": round(float(edited_cost), dec),
+                    }
+                    save_config(st.session_state.group_tickers, st.session_state.portfolio)
+                    st.session_state.pop(edit_key, None)
+                    st.rerun()
+            with c5:
+                if st.button("取消", key=f"port_cancel_{acct_key}_{ticker}", use_container_width=True):
+                    st.session_state.pop(edit_key, None)
+                    st.rerun()
+        else:
+            with c2:
+                st.markdown(
+                    f"<div style='font-family:Courier New;color:#d4eaf5;"
+                    f"font-size:0.85rem;padding-top:8px;"
+                    f"display:flex;justify-content:flex-end;gap:4px;'>"
+                    f"<span style='text-align:right;'>{int(pos['shares']):,}</span>"
+                    f"<span>股</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with c3:
+                st.markdown(
+                    f"<div style='font-family:Courier New;color:#d4eaf5;"
+                    f"font-size:0.85rem;padding-top:8px;'>{_fmt_cost(pos['avg_cost'], currency)}</div>",
+                    unsafe_allow_html=True,
+                )
+            with c4:
+                if st.button("編輯", key=f"port_edit_{acct_key}_{ticker}", use_container_width=True):
+                    st.session_state[edit_key] = ticker
+                    st.rerun()
+            with c5:
+                if st.button("刪除", key=f"port_rm_{acct_key}_{ticker}", use_container_width=True):
+                    del st.session_state.portfolio[acct_key]["positions"][ticker]
+                    save_config(st.session_state.group_tickers, st.session_state.portfolio)
+                    st.session_state.pop(edit_key, None)
+                    st.rerun()
+
+    # ── Drag-to-reorder ────────────────────────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    _sort_key = f"show_sort_port_{acct_key}"
+    _show_sort = st.session_state.get(_sort_key, False)
+    _sort_label = "↕ 收起排序 ▲" if _show_sort else "↕ 調整持倉順序 ▼"
+    if st.button(_sort_label, key=f"sort_toggle_{acct_key}"):
+        _show_sort = not _show_sort
+        st.session_state[_sort_key] = _show_sort
+
+    if _show_sort and positions:
+        _port_sortable_style = """
+        .sortable-component {
+            background: rgba(0,29,58,0.7);
+            border: 1px solid rgba(8,120,164,0.3);
+            border-radius: 8px;
+            padding: 6px 8px;
+            min-height: 44px;
+        }
+        .sortable-item {
+            background-color: rgba(0,45,90,0.9) !important;
+            border: 1px solid rgba(8,120,164,0.4) !important;
+            color: #7ecde4 !important;
+            font-family: 'Courier New', monospace !important;
+            font-weight: 700 !important;
+            font-size: 0.8rem !important;
+            letter-spacing: 0.08em !important;
+            border-radius: 5px !important;
+        }
+        .sortable-item:hover {
+            background-color: rgba(8,120,164,0.25) !important;
+            border-color: rgba(30,207,214,0.45) !important;
+            color: #1ECFD6 !important;
+        }
+        """
+        _ticker_list = list(positions.keys())
+        _new_order = sort_items(
+            _ticker_list,
+            direction="horizontal",
+            custom_style=_port_sortable_style,
+            key=f"port_drag_{acct_key}",
+        )
+        if _new_order != _ticker_list:
+            reordered = {t: positions[t] for t in _new_order if t in positions}
+            st.session_state.portfolio[acct_key]["positions"] = reordered
+            save_config(st.session_state.group_tickers, st.session_state.portfolio)
+            st.rerun()
+
+
 # ── Header ────────────────────────────────────────────────────────────────────
 ms_text, ms_cls, et_now = market_status()
 
@@ -706,20 +1309,33 @@ for tab, gname in zip(tabs[1:], GROUPS.keys()):
 
             # ── Add / remove tickers ─────────────────────────────────────
             with st.expander("＋ 編輯股票清單"):
+                _grp_inp_key = f"inp_{gname}"
+                def _to_upper_grp(_k=_grp_inp_key):
+                    st.session_state[_k] = st.session_state[_k].upper()
+
                 c_input, c_btn = st.columns([4, 1])
                 with c_input:
                     new_t = st.text_input(
                         "新增代號", placeholder="e.g. META",
-                        key=f"inp_{gname}", label_visibility="collapsed",
+                        key=_grp_inp_key, label_visibility="collapsed",
+                        on_change=_to_upper_grp,
                     )
                 with c_btn:
-                    if st.button("新增", key=f"add_{gname}", use_container_width=True):
-                        t = new_t.strip().upper()
-                        if t and t not in st.session_state.group_tickers[gname]:
-                            st.session_state.group_tickers[gname].append(t)
-                            save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                            st.cache_data.clear()
-                            st.rerun()
+                    _grp_add_clicked = st.button("新增", key=f"add_{gname}", use_container_width=True)
+
+                if _grp_add_clicked:
+                    t = new_t.strip().upper()
+                    if not t:
+                        st.error("請輸入股票代號")
+                    elif t in st.session_state.group_tickers[gname]:
+                        st.warning(f"「{t}」已在清單中")
+                    elif not _ticker_exists(t):
+                        st.error(f"找不到股票代號「{t}」，請確認代號是否正確")
+                    else:
+                        st.session_state.group_tickers[gname].append(t)
+                        save_config(st.session_state.group_tickers, st.session_state.portfolio)
+                        st.cache_data.clear()
+                        st.rerun()
 
                 # Chip-style remove buttons
                 st.markdown(
@@ -833,338 +1449,118 @@ for tab, gname in zip(tabs[1:], GROUPS.keys()):
 
 # ── 持倉 Tab ──────────────────────────────────────────────────────────────────
 with tabs[0]:
-    port_pnl, port_manage = st.tabs(["💰 今日損益", "📝 持倉管理"])
+    acct_tabs = st.tabs([
+        "📊 整體損益",
+        "🏦 複委託（台幣戶）",
+        "🏦 複委託（美金戶）",
+        "🇹🇼 台股帳戶",
+    ])
 
-    # ── 持倉管理 ─────────────────────────────────────────────────────────────
-    with port_manage:
-        st.markdown(
-            "<div style='font-family:Courier New;font-size:0.75rem;"
-            "color:#4a6a8a;margin-bottom:10px;'>"
-            "新增持倉後自動儲存，重啟仍保留。</div>",
-            unsafe_allow_html=True,
-        )
-        if "port_add_n" not in st.session_state:
-            st.session_state.port_add_n = 0
-        _n = st.session_state.port_add_n
+    # ── 整體損益 ─────────────────────────────────────────────────────────────
+    with acct_tabs[0]:
+        _usd_rows_by_acct = {
+            "複委託（台幣戶）": _portfolio_rows("複委託（台幣戶）"),
+            "複委託（美金戶）": _portfolio_rows("複委託（美金戶）"),
+        }
+        usd_rows = _usd_rows_by_acct["複委託（台幣戶）"] + _usd_rows_by_acct["複委託（美金戶）"]
+        twd_rows = _portfolio_rows("台股帳戶")
 
-        a1, a2, a3, a4 = st.columns([2, 2, 2, 1])
-        with a1:
-            new_ticker = st.text_input("股票代號", placeholder="e.g. AAPL",
-                                       key=f"port_ticker_{_n}", label_visibility="visible")
-        with a2:
-            new_shares = st.number_input("股數（整數）", min_value=0, step=1,
-                                         key=f"port_shares_{_n}", label_visibility="visible")
-        with a3:
-            new_cost = st.number_input("平均成本 (USD)", min_value=0.0, step=0.001,
-                                       format="%.3f", key=f"port_cost_{_n}",
-                                       label_visibility="visible")
-        with a4:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            if st.button("新增", key="port_add", use_container_width=True):
-                t = new_ticker.strip().upper()
-                if t and new_shares > 0 and new_cost > 0:
-                    st.session_state.portfolio[t] = {
-                        "shares": int(new_shares), "avg_cost": round(float(new_cost), 3)
-                    }
-                    save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                    st.session_state.port_add_n += 1  # change keys → clears fields
-                    st.rerun()
-
-        st.markdown("<hr>", unsafe_allow_html=True)
-
-        if not st.session_state.portfolio:
+        if not usd_rows and not twd_rows:
             st.markdown(
                 "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
-                "尚無持倉，請在上方新增。</div>",
+                "尚無持倉，請先在各帳戶分頁新增。</div>",
                 unsafe_allow_html=True,
             )
         else:
-            _editing = st.session_state.get("editing_port")
-            _COLS = [1.4, 1.4, 1.8, 0.8, 0.8]
-            # Header — labels use same columns so text aligns; hr spans full width
-            hc = st.columns(_COLS)
-            for col, label in zip(hc, ["代號", "股數", "平均成本 (USD)", "", ""]):
-                col.markdown(
-                    f"<div style='font-family:Courier New;font-size:0.7rem;"
-                    f"color:#4a6a8a;'>{label}</div>",
+            if usd_rows:
+                st.markdown(
+                    "<div style='font-family:Courier New;color:#EDD170;"
+                    "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
+                    "margin:8px 0 12px;'>◈ 美股市場 (USD)</div>",
                     unsafe_allow_html=True,
                 )
-            st.markdown(
-                "<hr style='border:none;border-top:1px solid rgba(8,120,164,0.25);"
-                "margin:4px 0 6px;'>",
-                unsafe_allow_html=True,
-            )
-
-            for ticker, pos in list(st.session_state.portfolio.items()):
-                is_edit = (_editing == ticker)
-                c1, c2, c3, c4, c5 = st.columns(_COLS)
-
-                with c1:
+                _sub_totals = []
+                for _sub_ak, _sub_label in [
+                    ("複委託（台幣戶）", "🏦 複委託（台幣戶）"),
+                    ("複委託（美金戶）", "🏦 複委託（美金戶）"),
+                ]:
+                    _sub_rows = _usd_rows_by_acct[_sub_ak]
+                    if not _sub_rows:
+                        continue
                     st.markdown(
-                        f"<div style='font-family:Courier New;font-weight:700;"
-                        f"color:#1ECFD6;font-size:0.9rem;padding-top:8px;'>{ticker}</div>",
+                        f"<div style='font-family:Courier New;font-size:0.74rem;font-weight:700;"
+                        f"color:#7ecde4;letter-spacing:0.08em;"
+                        f"padding:4px 0 4px 10px;"
+                        f"border-left:2px solid rgba(30,207,214,0.45);"
+                        f"margin:8px 0 6px;'>{_sub_label}</div>",
                         unsafe_allow_html=True,
                     )
-                if is_edit:
-                    with c2:
-                        edited_shares = st.number_input(
-                            "股數", min_value=0, step=1, value=int(pos["shares"]),
-                            key=f"edit_shares_{ticker}", label_visibility="collapsed",
-                        )
-                    with c3:
-                        edited_cost = st.number_input(
-                            "成本", min_value=0.0, step=0.001, format="%.3f",
-                            value=float(pos["avg_cost"]),
-                            key=f"edit_cost_{ticker}", label_visibility="collapsed",
-                        )
-                    with c4:
-                        if st.button("儲存", key=f"port_save_{ticker}", use_container_width=True):
-                            st.session_state.portfolio[ticker] = {
-                                "shares": int(edited_shares),
-                                "avg_cost": round(float(edited_cost), 3),
-                            }
-                            save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                            st.session_state.pop("editing_port", None)
-                            st.rerun()
-                    with c5:
-                        if st.button("取消", key=f"port_cancel_{ticker}", use_container_width=True):
-                            st.session_state.pop("editing_port", None)
-                            st.rerun()
-                else:
-                    with c2:
-                        st.markdown(
-                            f"<div style='font-family:Courier New;color:#d4eaf5;"
-                            f"font-size:0.85rem;padding-top:8px;"
-                            f"display:flex;justify-content:flex-end;gap:4px;'>"
-                            f"<span style='text-align:right;'>{int(pos['shares']):,}</span>"
-                            f"<span>股</span></div>",
-                            unsafe_allow_html=True,
-                        )
-                    with c3:
-                        st.markdown(
-                            f"<div style='font-family:Courier New;color:#d4eaf5;"
-                            f"font-size:0.85rem;padding-top:8px;'>${pos['avg_cost']:.3f}</div>",
-                            unsafe_allow_html=True,
-                        )
-                    with c4:
-                        if st.button("編輯", key=f"port_edit_{ticker}", use_container_width=True):
-                            st.session_state["editing_port"] = ticker
-                            st.rerun()
-                    with c5:
-                        if st.button("刪除", key=f"port_rm_{ticker}", use_container_width=True):
-                            del st.session_state.portfolio[ticker]
-                            save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                            st.session_state.pop("editing_port", None)
-                            st.rerun()
+                    _st, _spm, _su, _shd = _render_pnl_table(_sub_rows, "USD")
+                    _sub_totals.append((_st, _spm, _su, _shd))
+                    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-    # ── 今日損益 ─────────────────────────────────────────────────────────────
-    with port_pnl:
-        if not st.session_state.portfolio:
-            st.markdown(
-                "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
-                "尚無持倉，請先至「📝 持倉管理」新增。</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            port_tickers = tuple(st.session_state.portfolio.keys())
-            port_quotes  = fetch_quotes(port_tickers)
-            quote_map    = {q["ticker"]: q for q in port_quotes}
-
-            rows = []
-            for ticker, pos in st.session_state.portfolio.items():
-                q = quote_map.get(ticker, {})
-                price = q.get("price")
-                pct   = q.get("pct")
-                shares   = pos["shares"]
-                avg_cost = pos["avg_cost"]
-
-                if price is not None and pct is not None:
-                    prev_close   = price / (1 + pct / 100)
-                    per_share    = price - prev_close
-                    today_gain   = per_share * shares
-                    unreal_gain  = (price - avg_cost) * shares
-                    unreal_pct   = (price - avg_cost) / avg_cost * 100
-                else:
-                    prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
-
-                rows.append({
-                    "ticker": ticker, "shares": shares, "avg_cost": avg_cost,
-                    "price": price, "pct": pct, "prev_close": prev_close,
-                    "per_share": per_share, "today_gain": today_gain,
-                    "unreal_gain": unreal_gain, "unreal_pct": unreal_pct,
-                })
-
-            # ── Table header ─────────────────────────────────────────────────
-            st.markdown("""
-            <div style='display:grid;
-                grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
-                font-family:Courier New;font-size:0.68rem;color:#4a6a8a;
-                padding:4px 8px 6px;border-bottom:1px solid rgba(8,120,164,0.25);
-                margin-bottom:6px;'>
-              <span>代號</span><span>股數</span><span>成本</span>
-              <span>現價</span><span>單股漲跌</span>
-              <span>今日損益</span><span>未實現損益</span>
-            </div>""", unsafe_allow_html=True)
-
-            # ── Rows ─────────────────────────────────────────────────────────
-            total_today   = 0.0
-            total_prev_mv = 0.0
-            total_unreal  = 0.0
-            has_data      = False
-
-            for r in rows:
-                if r["price"] is None:
-                    single_str = today_str = unreal_str = price_str = "N/A"
-                    single_cls = today_cls = unreal_cls = "neu"
-                else:
-                    has_data    = True
-                    ps          = r["per_share"]
-                    ps_sign     = "+" if ps >= 0 else ""
-                    pct_sign    = "+" if r["pct"] >= 0 else ""
-                    today_sign  = "+" if r["today_gain"] >= 0 else ""
-                    unreal_sign = "+" if r["unreal_gain"] >= 0 else ""
-                    price_str   = f"${r['price']:,.2f}"
-                    single_str  = (f"{ps_sign}${abs(ps):.3f} "
-                                   f"({pct_sign}{r['pct']:.2f}%)")
-                    today_str   = f"{today_sign}${abs(r['today_gain']):,.2f}"
-                    unreal_str  = (f"{unreal_sign}${abs(r['unreal_gain']):,.2f} "
-                                   f"({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)")
-                    single_cls  = "pos" if ps >= 0 else "neg"
-                    today_cls   = "pos" if r["today_gain"] >= 0 else "neg"
-                    unreal_cls  = "pos" if r["unreal_gain"] >= 0 else "neg"
-                    total_today   += r["today_gain"]
-                    total_prev_mv += r["prev_close"] * r["shares"]
-                    total_unreal  += r["unreal_gain"]
-
-                st.markdown(f"""
-                <div style='display:grid;
-                    grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
-                    font-family:Courier New;font-size:0.82rem;
-                    padding:6px 8px;
-                    background:linear-gradient(135deg,rgba(0,61,115,0.3),rgba(8,120,164,0.06));
-                    border:1px solid rgba(8,120,164,0.2);border-radius:7px;margin-bottom:4px;'>
-                  <span style='color:#1ECFD6;font-weight:800;'>{r["ticker"]}</span>
-                  <span style='color:#d4eaf5;'>{r["shares"]:g}</span>
-                  <span style='color:#d4eaf5;'>${r["avg_cost"]:.3f}</span>
-                  <span style='color:#d4eaf5;'>{price_str}</span>
-                  <span class='{single_cls}'>{single_str}</span>
-                  <span class='{today_cls}'>{today_str}</span>
-                  <span class='{unreal_cls}'>{unreal_str}</span>
-                </div>""", unsafe_allow_html=True)
-
-            # ── Summary ──────────────────────────────────────────────────────
-            st.markdown(
-                "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
-                unsafe_allow_html=True,
-            )
-            if has_data:
-                total_pct  = (total_today / total_prev_mv * 100) if total_prev_mv else 0
-                t_sign     = "+" if total_today >= 0 else ""
-                tp_sign    = "+" if total_pct >= 0 else ""
-                t_cls      = "pos" if total_today >= 0 else "neg"
-                u_sign     = "+" if total_unreal >= 0 else ""
-                u_cls      = "pos" if total_unreal >= 0 else "neg"
-                st.markdown(f"""
-                <div style='font-family:Courier New;font-size:0.88rem;
-                    padding:10px 14px;
-                    background:rgba(0,29,58,0.6);
-                    border:1px solid rgba(8,120,164,0.35);border-radius:8px;
-                    display:flex;gap:40px;align-items:center;'>
-                  <span style='color:#4a6a8a;'>今日總損益</span>
-                  <span class='{t_cls}' style='font-weight:800;font-size:1rem;'>
-                    {t_sign}${abs(total_today):,.2f}
-                  </span>
-                  <span class='{t_cls}'>({tp_sign}{total_pct:.2f}%)</span>
-                  <span style='color:#2d4a6a;margin-left:auto;font-size:0.75rem;'>
-                    未實現總損益
-                  </span>
-                  <span class='{u_cls}' style='font-size:0.88rem;'>
-                    {u_sign}${abs(total_unreal):,.2f}
-                  </span>
-                </div>""", unsafe_allow_html=True)
-            else:
                 st.markdown(
-                    "<div style='font-family:Courier New;color:#2d4a6a;"
-                    "font-size:0.82rem;'>無法取得報價，請稍後再試。</div>",
+                    "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
                     unsafe_allow_html=True,
                 )
+                if _sub_totals:
+                    _t  = sum(x[0] for x in _sub_totals)
+                    _pm = sum(x[1] for x in _sub_totals)
+                    _u  = sum(x[2] for x in _sub_totals)
+                    _hd = any(x[3] for x in _sub_totals)
+                    if _hd:
+                        _render_summary_bar(_t, _pm, _u, "USD")
+                _render_pnl_chart(usd_rows, "USD", key_prefix="overall_usd")
 
-            # ── Bubble chart ─────────────────────────────────────────────────
-            bubble_rows = [r for r in rows if r["price"] is not None]
-            if len(bubble_rows) >= 1:
-                import math
-                b_x      = [r["pct"] for r in bubble_rows]
-                b_y      = [r["today_gain"] for r in bubble_rows]
-                b_labels = [r["ticker"] for r in bubble_rows]
-                b_mv     = [r["price"] * r["shares"] for r in bubble_rows]
-                b_colors = ["#C05640" if p >= 0 else "#3DAA70" for p in b_x]
-
-                # Bubble size: scale market value to sizeref so largest ~60px
-                max_mv   = max(b_mv) or 1
-                b_sizes  = [max(math.sqrt(mv / max_mv) * 80, 14) for mv in b_mv]
-
-                hover = [
-                    (f"<b>{r['ticker']}</b><br>"
-                     f"今日%：{'+' if r['pct']>=0 else ''}{r['pct']:.2f}%<br>"
-                     f"今日損益：{'+' if r['today_gain']>=0 else ''}${r['today_gain']:,.2f}<br>"
-                     f"持倉市值：${r['price']*r['shares']:,.2f}")
-                    for r in bubble_rows
-                ]
-
-                bfig = go.Figure()
-                bfig.add_trace(go.Scatter(
-                    x=b_x, y=b_y,
-                    mode="markers+text",
-                    marker=dict(
-                        size=b_sizes,
-                        color=b_colors,
-                        opacity=0.82,
-                        line=dict(color="rgba(30,207,214,0.4)", width=1.5),
-                    ),
-                    text=b_labels,
-                    textposition="middle center",
-                    textfont=dict(
-                        color=[contrast_text(c) for c in b_colors],
-                        size=12, family="Courier New", weight="bold",
-                    ),
-                    hovertext=hover,
-                    hoverinfo="text",
-                ))
-
-                # Quadrant zero lines
-                bfig.add_hline(y=0, line=dict(color="rgba(8,120,164,0.5)", width=1, dash="dot"))
-                bfig.add_vline(x=0, line=dict(color="rgba(8,120,164,0.5)", width=1, dash="dot"))
-
-                bfig.update_layout(
-                    xaxis=dict(
-                        title="今日漲跌%",
-                        title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
-                        tickformat=".2f", ticksuffix="%",
-                        tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
-                        gridcolor="rgba(8,120,164,0.12)",
-                        zeroline=False,
-                    ),
-                    yaxis=dict(
-                        title="今日損益 (USD)",
-                        title_font=dict(color="#4a6a8a", size=10, family="Courier New"),
-                        tickprefix="$", tickformat=",.0f",
-                        tickfont=dict(color="#4a6a8a", size=10, family="Courier New"),
-                        gridcolor="rgba(8,120,164,0.12)",
-                        zeroline=False,
-                    ),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,29,58,0.4)",
-                    height=420,
-                    margin=dict(l=60, r=20, t=36, b=50),
-                    showlegend=False,
-                    title=dict(
-                        text="◈ 今日損益氣泡圖  （氣泡大小 = 持倉市值）",
-                        font=dict(color="#1ECFD6", size=11, family="Courier New"),
-                        x=0.5,
-                    ),
+            if twd_rows:
+                if usd_rows:
+                    st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='font-family:Courier New;color:#EDD170;"
+                    "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
+                    "margin:8px 0 10px;'>◈ 台股市場 (TWD)</div>",
+                    unsafe_allow_html=True,
                 )
-                st.plotly_chart(bfig, use_container_width=True,
-                                config={"displayModeBar": False})
+                _t, _pm, _u, _hd = _render_pnl_table(twd_rows, "TWD")
+                st.markdown(
+                    "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
+                    unsafe_allow_html=True,
+                )
+                if _hd:
+                    _render_summary_bar(_t, _pm, _u, "TWD")
+                _render_pnl_chart(twd_rows, "TWD", key_prefix="overall_twd")
+
+    # ── Per-account tabs ──────────────────────────────────────────────────────
+    for _acct_tab, (_acct_key, _currency) in zip(acct_tabs[1:], _ACCT_MAP):
+        with _acct_tab:
+            pnl_tab, manage_tab = st.tabs(["💰 今日損益", "📝 持倉管理"])
+
+            with pnl_tab:
+                rows = _portfolio_rows(_acct_key)
+                if not rows:
+                    st.markdown(
+                        "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
+                        "尚無持倉，請先至「📝 持倉管理」新增。</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    _t, _pm, _u, _hd = _render_pnl_table(rows, _currency)
+                    st.markdown(
+                        "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
+                        unsafe_allow_html=True,
+                    )
+                    if _hd:
+                        _render_summary_bar(_t, _pm, _u, _currency)
+                    else:
+                        st.markdown(
+                            "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
+                            "無法取得報價，請稍後再試。</div>",
+                            unsafe_allow_html=True,
+                        )
+                    _render_pnl_chart(rows, _currency, key_prefix=f"acct_{_acct_key}")
+
+            with manage_tab:
+                _render_manage_tab(_acct_key, _currency)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""

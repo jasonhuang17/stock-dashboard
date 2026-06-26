@@ -1,4 +1,5 @@
 config.json
+DEV_LOG.md
 __pycache__/
 *.pyc
 .DS_Store
