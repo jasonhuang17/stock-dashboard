@@ -9,24 +9,25 @@ import type { PortfolioRow } from "@/lib/types";
 
 type Currency = "USD" | "TWD";
 type View = "bubble" | "waterfall" | "treemap" | "bar";
+type Mode = "today" | "unreal";
 
-const PALETTE = ["#1ECFD6","#EDD170","#C05640","#5BB8D4","#F0A835","#E8855A","#3A9BC1","#7EDDE4","#0D5C8C","#F5C842","#1AA5B0"];
 const POS = "#C05640";
 const NEG = "#3DAA70";
 
 function color(v: number | null) { return v === null ? "#6899b8" : v >= 0 ? POS : NEG; }
 
-function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
-  const data = rows.filter(r => r.price !== null).map(r => ({
-    ticker: r.ticker,
-    name: r.name ?? "",
-    x: r.pct ?? 0,
-    y: r.today_gain ?? 0,
-    z: Math.abs((r.price ?? 0) * r.shares),
-  }));
+function BubbleChart({ rows, mode }: { rows: PortfolioRow[]; mode: Mode }) {
+  const isUnreal = mode === "unreal";
+  const data = rows
+    .filter(r => r.price !== null && (isUnreal ? r.unreal_gain !== null : r.today_gain !== null))
+    .map(r => ({
+      ticker: r.ticker,
+      name: r.name ?? "",
+      x: isUnreal ? (r.unreal_pct ?? 0) : (r.pct ?? 0),
+      y: isUnreal ? (r.unreal_gain ?? 0) : (r.today_gain ?? 0),
+      z: Math.abs((r.price ?? 0) * r.shares),
+    }));
 
-  // Pad domains so edge bubbles don't overflow the plot area.
-  // Y needs ~30%: the largest bubble radius is ~23% of plot height.
   const xs = data.map(d => d.x);
   const ys = data.map(d => d.y);
   const xMin = Math.min(...xs, 0), xMax = Math.max(...xs, 0);
@@ -36,16 +37,12 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   const xDomain: [number, number] = [xMin - xPad, xMax + xPad];
   const yDomainPadded: [number, number] = [yMin - yPad, yMax + yPad];
 
-  // Power-of-10 ticks targeting ~5 intervals, minimum base 10 (integers only).
-  // Using round(log10(range/5)) picks the right magnitude; floor() gives too many ticks,
-  // ceil() too few — round() hits ~4-6 every time.
   const yRange = Math.max(yDomainPadded[1] - yDomainPadded[0], 20);
   const yBase = Math.pow(10, Math.max(1, Math.round(Math.log10(yRange / 5))));
   const yTickMin = Math.floor(yDomainPadded[0] / yBase) * yBase;
   const yTickMax = Math.ceil(yDomainPadded[1] / yBase) * yBase;
   const yTicks: number[] = [];
   for (let t = yTickMin; t <= yTickMax + 0.01; t += yBase) yTicks.push(Math.round(t));
-  // Expand domain to cover all ticks so none are clipped
   const yDomain: [number, number] = [
     Math.min(yDomainPadded[0], yTickMin),
     Math.max(yDomainPadded[1], yTickMax),
@@ -74,11 +71,14 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
     );
   };
 
+  const xLabel = isUnreal ? "未實現%" : "今日%";
+  const yLabel = isUnreal ? "未實現損益" : "今日損益";
+
   return (
     <ResponsiveContainer width="100%" height={340}>
       <ScatterChart margin={{ top: 48, right: 60, bottom: 24, left: 16 }}>
-        <XAxis dataKey="x" type="number" name="今日%" domain={xDomain} tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
-        <YAxis dataKey="y" type="number" name="今日損益" domain={yDomain} ticks={yTicks} tickFormatter={v => v.toLocaleString()} tick={{ fill: "#6899b8", fontSize: 11 }} />
+        <XAxis dataKey="x" type="number" name={xLabel} domain={xDomain} tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+        <YAxis dataKey="y" type="number" name={yLabel} domain={yDomain} ticks={yTicks} tickFormatter={v => v.toLocaleString()} tick={{ fill: "#6899b8", fontSize: 11 }} />
         <Tooltip
           cursor={{ stroke: "rgba(30,207,214,0.2)" }}
           content={({ payload: pl }) => {
@@ -87,9 +87,9 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
             return (
               <div style={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", padding: "8px 12px", fontFamily: "Courier New", fontSize: 12 }}>
                 <div style={{ color: "#1ECFD6", fontWeight: 700, marginBottom: 2 }}>{d.ticker}{d.name ? ` ${d.name}` : ""}</div>
-                <div>今日%：{d.x >= 0 ? "+" : ""}{d.x.toFixed(2)}%</div>
-                <div style={{ color: d.y >= 0 ? "#c05640" : "#3daa70" }}>
-                  今日損益：{d.y >= 0 ? "+" : ""}{d.y.toFixed(2)}
+                <div>{xLabel}：{d.x >= 0 ? "+" : ""}{d.x.toFixed(2)}%</div>
+                <div style={{ color: color(d.y) }}>
+                  {yLabel}：{d.y >= 0 ? "+" : ""}{d.y.toFixed(2)}
                 </div>
               </div>
             );
@@ -105,14 +105,17 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   );
 }
 
-function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
-  const valid = rows.filter(r => r.today_gain !== null);
-  const sorted = [...valid].sort((a, b) => (b.today_gain ?? 0) - (a.today_gain ?? 0));
-  const total = sorted.reduce((s, r) => s + (r.today_gain ?? 0), 0);
+function WaterfallChart({ rows, currency, mode }: { rows: PortfolioRow[]; currency: Currency; mode: Mode }) {
+  const isUnreal = mode === "unreal";
+  const field = isUnreal ? "unreal_gain" : "today_gain";
+  const label = isUnreal ? "未實現損益" : "今日損益";
+  const valid = rows.filter(r => r[field] !== null);
+  const sorted = [...valid].sort((a, b) => ((b[field] as number) ?? 0) - ((a[field] as number) ?? 0));
+  const total = sorted.reduce((s, r) => s + ((r[field] as number) ?? 0), 0);
   const sym = currency === "TWD" ? "NT$" : "$";
 
   const data = [
-    ...sorted.map(r => ({ name: r.name || r.ticker, value: r.today_gain ?? 0 })),
+    ...sorted.map(r => ({ name: r.name || r.ticker, value: (r[field] as number) ?? 0 })),
     { name: "合計", value: total },
   ];
 
@@ -123,7 +126,7 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
         <YAxis tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
-          formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, "損益"] as [string, string]; }}
+          formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, label] as [string, string]; }}
         />
         <ReferenceLine y={0} stroke="rgba(8,120,164,0.3)" />
         <Bar dataKey="value">
@@ -138,10 +141,16 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
   );
 }
 
-function TreemapChart({ rows }: { rows: PortfolioRow[] }) {
+function TreemapChart({ rows, mode }: { rows: PortfolioRow[]; mode: Mode }) {
+  const isUnreal = mode === "unreal";
   const data = rows
     .filter(r => r.price !== null)
-    .map(r => ({ name: r.ticker, cnName: r.name ?? "", size: Math.abs((r.price ?? 0) * r.shares), pct: r.pct ?? 0 }));
+    .map(r => ({
+      name: r.ticker,
+      cnName: r.name ?? "",
+      size: Math.abs((r.price ?? 0) * r.shares),
+      pct: isUnreal ? (r.unreal_pct ?? 0) : (r.pct ?? 0),
+    }));
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -151,7 +160,6 @@ function TreemapChart({ rows }: { rows: PortfolioRow[] }) {
             x: number; y: number; width: number; height: number;
             name?: string; cnName?: string; pct?: number;
           };
-          // Recharts passes a root wrapper node with no leaf data — skip it
           if (typeof pct !== "number" || !name) return <g />;
           const showCn = cnName && width > 64 && height > 44;
           return (
@@ -174,9 +182,12 @@ function TreemapChart({ rows }: { rows: PortfolioRow[] }) {
   );
 }
 
-function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
-  const valid = rows.filter(r => r.today_gain !== null);
-  const sorted = [...valid].sort((a, b) => (a.today_gain ?? 0) - (b.today_gain ?? 0));
+function BarChartView({ rows, currency, mode }: { rows: PortfolioRow[]; currency: Currency; mode: Mode }) {
+  const isUnreal = mode === "unreal";
+  const field = isUnreal ? "unreal_gain" : "today_gain";
+  const label = isUnreal ? "未實現損益" : "今日損益";
+  const valid = rows.filter(r => r[field] !== null);
+  const sorted = [...valid].sort((a, b) => ((a[field] as number) ?? 0) - ((b[field] as number) ?? 0));
   const sym = currency === "TWD" ? "NT$" : "$";
   const hasTwNames = sorted.some(r => r.name);
   const data = sorted.map(r => ({ ...r, displayName: r.name ? `${r.ticker} ${r.name}` : r.ticker }));
@@ -188,12 +199,12 @@ function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Curr
         <YAxis type="category" dataKey="displayName" tick={{ fill: "#1ECFD6", fontSize: hasTwNames ? 10 : 11, fontFamily: "Courier New", fontWeight: 700 }} width={hasTwNames ? 110 : 55} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
-          formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, "今日損益"] as [string, string]; }}
+          formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, label] as [string, string]; }}
         />
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.3)" />
-        <Bar dataKey="today_gain" radius={[0, 3, 3, 0]}>
-          {sorted.map((r, i) => <Cell key={i} fill={color(r.today_gain)} fillOpacity={0.8} />)}
-          <LabelList dataKey="today_gain" position="right" style={{ fill: "#6899b8", fontSize: 10 }} formatter={(v: unknown) => { const n = v as number; return n >= 0 ? `+${n.toFixed(0)}` : n.toFixed(0); }} />
+        <Bar dataKey={field} radius={[0, 3, 3, 0]}>
+          {sorted.map((r, i) => <Cell key={i} fill={color(r[field] as number | null)} fillOpacity={0.8} />)}
+          <LabelList dataKey={field} position="right" style={{ fill: "#6899b8", fontSize: 10 }} formatter={(v: unknown) => { const n = v as number; return n >= 0 ? `+${n.toFixed(0)}` : n.toFixed(0); }} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -202,6 +213,7 @@ function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Curr
 
 export function PnLChart({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
   const [view, setView] = useState<View>("bubble");
+  const [mode, setMode] = useState<Mode>("today");
   if (!rows.some(r => r.price !== null)) return null;
 
   const views: { key: View; label: string }[] = [
@@ -213,17 +225,43 @@ export function PnLChart({ rows, currency }: { rows: PortfolioRow[]; currency: C
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div className="chart-switcher">
-        {views.map(v => (
-          <button key={v.key} className={`chart-btn${view === v.key ? " active" : ""}`} onClick={() => setView(v.key)}>
-            {v.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+        {/* Mode toggle */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {(["today", "unreal"] as Mode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{
+                padding: "3px 10px",
+                fontSize: "0.72rem",
+                fontFamily: "Courier New",
+                fontWeight: 700,
+                border: `1px solid ${mode === m ? "var(--teal)" : "rgba(8,120,164,0.35)"}`,
+                borderRadius: 4,
+                background: mode === m ? "rgba(30,207,214,0.12)" : "transparent",
+                color: mode === m ? "var(--teal)" : "var(--dim)",
+                cursor: "pointer",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {m === "today" ? "今日損益" : "未實現損益"}
+            </button>
+          ))}
+        </div>
+        {/* Chart type switcher */}
+        <div className="chart-switcher" style={{ margin: 0 }}>
+          {views.map(v => (
+            <button key={v.key} className={`chart-btn${view === v.key ? " active" : ""}`} onClick={() => setView(v.key)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
-      {view === "bubble"    && <BubbleChart rows={rows} />}
-      {view === "waterfall" && <WaterfallChart rows={rows} currency={currency} />}
-      {view === "treemap"   && <TreemapChart rows={rows} />}
-      {view === "bar"       && <BarChartView rows={rows} currency={currency} />}
+      {view === "bubble"    && <BubbleChart rows={rows} mode={mode} />}
+      {view === "waterfall" && <WaterfallChart rows={rows} currency={currency} mode={mode} />}
+      {view === "treemap"   && <TreemapChart rows={rows} mode={mode} />}
+      {view === "bar"       && <BarChartView rows={rows} currency={currency} mode={mode} />}
     </div>
   );
 }
