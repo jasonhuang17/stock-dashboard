@@ -14,7 +14,7 @@ const PALETTE = ["#1ECFD6","#EDD170","#C05640","#5BB8D4","#F0A835","#E8855A","#3
 const POS = "#C05640";
 const NEG = "#3DAA70";
 
-function color(v: number | null) { return v === null ? "#2d4a6a" : v >= 0 ? POS : NEG; }
+function color(v: number | null) { return v === null ? "#6899b8" : v >= 0 ? POS : NEG; }
 
 function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   const data = rows.filter(r => r.price !== null).map(r => ({
@@ -26,8 +26,8 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-        <XAxis dataKey="x" type="number" name="今日%" tick={{ fill: "#2d4a6a", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
-        <YAxis dataKey="y" type="number" name="今日損益" tick={{ fill: "#2d4a6a", fontSize: 11 }} />
+        <XAxis dataKey="x" type="number" name="今日%" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+        <YAxis dataKey="y" type="number" name="今日損益" tick={{ fill: "#6899b8", fontSize: 11 }} />
         <Tooltip
           cursor={{ stroke: "rgba(30,207,214,0.2)" }}
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
@@ -59,8 +59,8 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-        <XAxis dataKey="name" tick={{ fill: "#2d4a6a", fontSize: 11 }} />
-        <YAxis tick={{ fill: "#2d4a6a", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
+        <XAxis dataKey="name" tick={{ fill: "#6899b8", fontSize: 11 }} />
+        <YAxis tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
           formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, "損益"] as [string, string]; }}
@@ -68,7 +68,7 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
         <ReferenceLine y={0} stroke="rgba(8,120,164,0.3)" />
         <Bar dataKey="value">
           {data.map((d, i) => <Cell key={i} fill={color(d.value)} fillOpacity={i === data.length - 1 ? 1 : 0.75} />)}
-          <LabelList dataKey="value" position="top" style={{ fill: "#2d4a6a", fontSize: 10 }} formatter={(v: unknown) => {
+          <LabelList dataKey="value" position="top" style={{ fill: "#6899b8", fontSize: 10 }} formatter={(v: unknown) => {
             const n = v as number;
             return `${n >= 0 ? "+" : "-"}${sym}${Math.abs(n).toFixed(0)}`;
           }} />
@@ -118,7 +118,7 @@ function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Curr
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 36)}>
       <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 60, left: 10, bottom: 4 }}>
-        <XAxis type="number" tick={{ fill: "#2d4a6a", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
+        <XAxis type="number" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
         <YAxis type="category" dataKey="ticker" tick={{ fill: "#1ECFD6", fontSize: 11, fontFamily: "Courier New", fontWeight: 700 }} width={55} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
@@ -127,7 +127,7 @@ function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Curr
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.3)" />
         <Bar dataKey="today_gain" radius={[0, 3, 3, 0]}>
           {sorted.map((r, i) => <Cell key={i} fill={color(r.today_gain)} fillOpacity={0.8} />)}
-          <LabelList dataKey="today_gain" position="right" style={{ fill: "#2d4a6a", fontSize: 10 }} formatter={(v: unknown) => { const n = v as number; return n >= 0 ? `+${n.toFixed(0)}` : n.toFixed(0); }} />
+          <LabelList dataKey="today_gain" position="right" style={{ fill: "#6899b8", fontSize: 10 }} formatter={(v: unknown) => { const n = v as number; return n >= 0 ? `+${n.toFixed(0)}` : n.toFixed(0); }} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

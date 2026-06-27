@@ -71,7 +71,7 @@ function NormalizedBar({ quotes }: { quotes: Quote[] }) {
           <LabelList
             dataKey="pct"
             position="right"
-            style={{ fill: "#2d4a6a", fontSize: 10 }}
+            style={{ fill: "#6899b8", fontSize: 10 }}
             formatter={(v: unknown) => { const n = v as number; return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`; }}
           />
         </Bar>
