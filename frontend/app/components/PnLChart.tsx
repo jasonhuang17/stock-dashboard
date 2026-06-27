@@ -249,6 +249,8 @@ export function PnLChart({ rows, currency }: { rows: PortfolioRow[]; currency: C
             </button>
           ))}
         </div>
+        {/* Divider */}
+        <span style={{ width: 1, height: 20, background: "rgba(8,120,164,0.35)", flexShrink: 0 }} />
         {/* Chart type switcher */}
         <div className="chart-switcher" style={{ margin: 0 }}>
           {views.map(v => (
