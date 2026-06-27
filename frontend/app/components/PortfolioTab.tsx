@@ -231,6 +231,7 @@ function ManageTab({
                 <th style={{ textAlign: "left" }}>代號</th>
                 <th>股數</th>
                 <th>總成本 ({sym})</th>
+                <th>單股成本 ({sym})</th>
                 <th style={{ textAlign: "left", width: 120 }}></th>
               </tr>
             </thead>
@@ -253,6 +254,9 @@ function ManageTab({
                           <input className="dash-input" style={{ width: 120 }} type="number" step="0.01"
                             value={editTotalCost} onChange={e => setEditTotalCost(e.target.value)} />
                         </td>
+                        <td style={{ color: "var(--dim)", fontSize: "0.8rem" }}>
+                          {(() => { const sh = parseFloat(editShares), tc = parseFloat(editTotalCost); return (!isNaN(sh) && !isNaN(tc) && sh > 0) ? (tc / sh).toFixed(3) : "—"; })()}
+                        </td>
                         <td style={{ textAlign: "left" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button className="dash-btn dash-btn-sm" onClick={() => handleEdit(t)}>儲存</button>
@@ -264,6 +268,7 @@ function ManageTab({
                       <>
                         <td>{pos.shares.toLocaleString()}</td>
                         <td>{displayTotalCost.toFixed(2)}</td>
+                        <td style={{ color: "var(--dim)" }}>{displayAvgCost.toFixed(3)}</td>
                         <td style={{ textAlign: "left" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button className="dash-btn dash-btn-sm" onClick={() => {
