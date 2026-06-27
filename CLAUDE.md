@@ -36,15 +36,19 @@ CLAUDE.md                 # 本檔案（已 commit）
 - **資料來源**：`yfinance`，30 秒 cache（`@st.cache_data(ttl=28)`）
 - **UI 框架**：Streamlit，深色科幻主題，Courier New 字型
 - **主色**：teal `#1ECFD6`、gold `#EDD170`、背景 `#001d3a`
-- **持久化**：`user_data.json`，結構如下：
+- **持久化**：`user_data.json`，**目前格式（schema_version 2）**：
   ```json
   {
-    "group_tickers": { "🚀 個股": [...], "⚡ 槓桿型": [...], "🌐 大盤型": [...] },
+    "schema_version": 2,
+    "group_tickers":  { "⚡ 個股": [...], "🚀 槓桿型": [...], "🌐 大盤型": [...] },
+    "group_markets":  { "⚡ 個股": "US", "🚀 槓桿型": "US", "🌐 大盤型": "US" },
+    "pinned_groups":  ["⚡ 個股", "🚀 槓桿型", "🌐 大盤型"],
     "portfolio": {
-      "複委託（台幣戶）": { "currency": "USD", "positions": { "AAPL": { "shares": 10, "avg_cost": 150.0 } } },
-      "複委託（美金戶）": { "currency": "USD", "positions": {} },
-      "台股帳戶":         { "currency": "TWD", "positions": { "2330": { "shares": 1000, "avg_cost": 500.0 } } }
-    }
+      "美股複委託（台幣帳戶）": { "currency": "USD", "positions": { "AAPL": { "shares": 10, "avg_cost": 150.0 } } },
+      "美股複委託（美金帳戶）": { "currency": "USD", "positions": {} },
+      "台股帳戶":               { "currency": "TWD", "positions": { "2330": { "shares": 1000, "avg_cost": 500.0 } } }
+    },
+    "settings": { "use_mock": false }
   }
   ```
 - **台股代號**：純代號存檔（`2330`，不含 `.TW`），`_resolve_tw_ticker()` 在 fetch 時自動試 `.TW` → `.TWO`
@@ -59,6 +63,49 @@ CLAUDE.md                 # 本檔案（已 commit）
 3. **每次 commit 必須在 `DEV_LOG.md` 的變更紀錄區補上條目**
 4. Git 作者統一使用 `jasonhuang17 <jasonh6208work@gmail.com>`（repo 已設定，不需額外設定）
 5. Push 前確認 `config.json` 不在 staging（已 gitignored，通常自動排除）
+6. **更改 `user_data.json` 格式時，必須同步新增 migration**（見下方「資料格式版本管理」）
+
+---
+
+## 資料格式版本管理
+
+**原則**：任何改動 `user_data.json` 結構的功能（新增欄位、重命名、刪除、型別改變），都必須同步新增 migration，否則舊版用戶升級後資料會壞掉。
+
+### 版本對照
+
+| schema_version | 對應 app 版本 | 主要改動 |
+|---|---|---|
+| 0（無此欄位） | 初始版 | 各種舊格式 |
+| 1 | app v1（origin/master） | 多帳戶 portfolio、圖標重命名 |
+| 2 | app v2（當前） | 新增 `group_markets` |
+
+### 新增 migration 的步驟（必須全部完成）
+
+```python
+# backend/main.py
+
+# 1. 新增 migration 函式
+def _migrate_v3(data: dict) -> dict:
+    """一句話說明這個版本改了什麼."""
+    # 修改 data 結構，保持向後相容
+    return data
+
+# 2. 註冊到 _MIGRATIONS dict
+_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3}
+
+# 3. Bump SCHEMA_VERSION
+SCHEMA_VERSION = 3
+```
+
+4. 更新 CLAUDE.md 的「架構摘要」區塊，把 `user_data.json` 格式範例和版本對照表更新到最新
+5. 在 DEV_LOG.md 記錄這次格式變更的內容
+
+### Migration 的注意事項
+
+- Migration 函式必須是**冪等的**（跑兩次結果相同）
+- 用 `if "new_key" not in data` 防呆，不要無條件覆寫
+- 不要刪除欄位（只新增或轉換），避免降版問題
+- Migration 在 `load_config()` 的第一行呼叫，用戶完全無感知
 
 ---
 

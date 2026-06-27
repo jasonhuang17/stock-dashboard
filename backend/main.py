@@ -99,14 +99,26 @@ TW_NAMES: dict = {
 
 
 # ── Schema migrations ─────────────────────────────────────────────────────────
-SCHEMA_VERSION = 3
+# Bump SCHEMA_VERSION and add _migrate_vN whenever user_data.json format changes.
+# See CLAUDE.md "資料格式版本管理" for the protocol.
+#
+# v1 — app v1 baseline (origin/master): consolidates all pre-versioning legacy formats
+# v2 — app v2: added group_markets per-group market designation
+SCHEMA_VERSION = 2
 
 
 def _migrate_v1(data: dict) -> dict:
-    """Flat portfolio {TICKER: {shares, avg_cost}} → multi-account structure.
-    Also handles oldest format where entire file = group_tickers (no wrapper)."""
+    """Bring any legacy format up to the app-v1 baseline.
+
+    Covers three historical formats in one pass:
+    1. Bare file (entire JSON = group_tickers dict, no wrapper)
+    2. Flat portfolio {TICKER: {shares, avg_cost}} → multi-account structure
+    3. Icon rename: 🚀 個股 → ⚡ 個股, ⚡ 槓桿型 → 🚀 槓桿型
+    """
+    # 1. Bare file
     if "group_tickers" not in data and "portfolio" not in data:
         data = {"group_tickers": {k: v for k, v in data.items() if isinstance(v, list)}}
+    # 2. Flat portfolio
     portfolio = data.get("portfolio", {})
     if portfolio:
         first = next(iter(portfolio.values()), {})
@@ -116,11 +128,7 @@ def _migrate_v1(data: dict) -> dict:
                 "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
                 "台股帳戶":         {"currency": "TWD", "positions": {}},
             }
-    return data
-
-
-def _migrate_v2(data: dict) -> dict:
-    """Rename group icons: 🚀 個股 → ⚡ 個股, ⚡ 槓桿型 → 🚀 槓桿型."""
+    # 3. Icon rename
     raw = data.get("group_tickers", {})
     pinned = data.get("pinned_groups", [])
     for old, new in _ICON_MIGRATION.items():
@@ -131,14 +139,14 @@ def _migrate_v2(data: dict) -> dict:
     return data
 
 
-def _migrate_v3(data: dict) -> dict:
-    """Add group_markets field; default all existing groups to 'US'."""
+def _migrate_v2(data: dict) -> dict:
+    """App v2: add group_markets field, default all existing groups to 'US'."""
     if "group_markets" not in data:
         data["group_markets"] = {k: "US" for k in data.get("group_tickers", {})}
     return data
 
 
-_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3}
+_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2}
 
 
 def run_migrations(data: dict) -> tuple[dict, bool]:
