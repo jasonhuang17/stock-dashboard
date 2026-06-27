@@ -81,12 +81,14 @@ export default function Dashboard() {
 
   async function handleCreateGroup() {
     const name = newGroupName.trim();
+    const market = newGroupMarket; // capture before any state changes
     if (!name) return;
     try {
-      const res = await api.createGroup(name, newGroupMarket);
+      const res = await api.createGroup(name, market);
       setGroups(res.groups);
       setPinned(res.pinned);
-      setMarkets(res.markets ?? {});
+      // Merge instead of overwrite: if backend omits markets, at least set the new group correctly
+      setMarkets(prev => ({ ...prev, ...(res.markets ?? { [name]: market }) }));
       const idx = Object.keys(res.groups).indexOf(name);
       if (idx >= 0) handleSetTab(idx + 1);
     } catch { /* silent */ }
@@ -105,7 +107,7 @@ export default function Dashboard() {
       const res = await api.deleteGroup(name);
       setGroups(res.groups);
       setPinned(res.pinned);
-      setMarkets(res.markets ?? {});
+      if (res.markets) setMarkets(res.markets);
       handleSetTab(0);
     } catch { /* silent */ }
   }
@@ -118,7 +120,7 @@ export default function Dashboard() {
       const res = await api.renameGroup(renamingGroup, newName);
       setGroups(res.groups);
       setPinned(res.pinned);
-      setMarkets(res.markets ?? {});
+      if (res.markets) setMarkets(res.markets);
       // keep same tab index (name changed, position unchanged)
     } catch { /* silent */ }
     setRenamingGroup(null);
@@ -129,7 +131,7 @@ export default function Dashboard() {
       const res = await api.reorderGroups(newOrder);
       setGroups(res.groups);
       setPinned(res.pinned);
-      setMarkets(res.markets ?? {});
+      if (res.markets) setMarkets(res.markets);
     } catch { /* silent */ }
   }
 
