@@ -26,8 +26,9 @@ export default function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [useMock, setUseMock]   = useState(false);
-  const cdRef   = useRef(REFRESH_INTERVAL);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cdRef         = useRef(REFRESH_INTERVAL);
+  const tickRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const renameEscRef  = useRef(false);  // true when Escape was pressed, suppresses onBlur rename
 
   const loadMeta = useCallback(async () => {
     try {
@@ -164,7 +165,7 @@ export default function Dashboard() {
 
       {/* Countdown */}
       <div style={{ fontSize: "0.7rem", color: "var(--teal)", letterSpacing: "0.06em", marginBottom: 2 }}>
-        ↻&nbsp; next data update in {countdown}s · prices ~15s delayed (Yahoo Finance)
+        ↻&nbsp; next data update in {countdown}s · prices up to ~30s delayed (Yahoo Finance)
       </div>
       <hr className="dash-hr" style={{ marginBottom: 12 }} />
 
@@ -194,8 +195,14 @@ export default function Dashboard() {
                     autoFocus
                     value={renameValue}
                     onChange={e => setRenameValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") handleRenameGroup(); if (e.key === "Escape") setRenamingGroup(null); }}
-                    onBlur={handleRenameGroup}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") e.currentTarget.blur(); // single path via onBlur
+                      if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); }
+                    }}
+                    onBlur={() => {
+                      if (renameEscRef.current) { renameEscRef.current = false; return; }
+                      handleRenameGroup();
+                    }}
                     style={{ fontFamily: "Courier New", fontSize: "0.78rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 8px", width: 120, outline: "none" }}
                   />
                 </div>
