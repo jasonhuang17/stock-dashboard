@@ -146,9 +146,9 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
       }
     }).catch(() => {});
 
-    // Listen for "apply to all" broadcasts from other tabs
     function onSync(e: Event) {
-      const { vis, order } = (e as CustomEvent<{ vis: string[]; order: string[] }>).detail;
+      const { target, vis, order } = (e as CustomEvent<{ target: string; vis: string[]; order: string[] }>).detail;
+      if (target !== account) return;
       setOptCols(new Set(vis));
       setColOrder(mergeOrder(order));
     }
@@ -191,12 +191,11 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
     });
   }
 
-  function applyToAll() {
+  function applyTo(target: string) {
     const vis = [...optCols];
     const order = colOrder;
-    const pnl_cols = Object.fromEntries(ALL_ACCOUNTS.map(a => [a, { vis, order }]));
-    api.setSettings({ pnl_cols }).catch(() => {});
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { vis, order } }));
+    api.setSettings({ pnl_cols: { [target]: { vis, order } } }).catch(() => {});
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target, vis, order } }));
   }
 
   const cols   = buildCols(currency, optCols, colOrder);
@@ -240,15 +239,16 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
                 })}
               </SortableContext>
             </DndContext>
-            <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8 }}>
-              <button
-                className="dash-btn dash-btn-sm"
-                onClick={applyToAll}
-                style={{ width: "100%", fontSize: "0.65rem" }}
-              >
-                套用至全部帳戶
-              </button>
-            </div>
+            {account && (
+              <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginBottom: 2 }}>套用至</div>
+                {ALL_ACCOUNTS.filter(a => a !== account).map(a => (
+                  <button key={a} className="dash-btn dash-btn-sm" onClick={() => applyTo(a)} style={{ fontSize: "0.65rem", textAlign: "left" }}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
