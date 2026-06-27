@@ -118,10 +118,11 @@ cd frontend && npm run dev
 
 ```bash
 # 清掉 backend（:8000）和 frontend（:3000）
-lsof -ti :8000 :3000 | xargs kill -9
+lsof -ti tcp:8000 | xargs kill -9
+lsof -ti tcp:3000 | xargs kill -9
 
-# 只清 backend
-lsof -ti :8000 | xargs kill -9
+# 或一行搞定
+lsof -ti tcp:8000,tcp:3000 | xargs kill -9
 ```
 
 **Windows（Command Prompt）**
