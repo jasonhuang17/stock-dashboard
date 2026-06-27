@@ -11,6 +11,7 @@ export interface PremarketQuote extends Quote {
 
 export interface PortfolioRow {
   ticker: string;
+  name?: string;
   shares: number;
   avg_cost: number;
   price: number | null;

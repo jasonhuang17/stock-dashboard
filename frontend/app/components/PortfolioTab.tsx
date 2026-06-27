@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api, fmtMoney, fmtPct } from "@/lib/api";
 import type { PortfolioRow, PremarketPortfolioRow, Portfolio } from "@/lib/types";
+import { twName } from "@/lib/tw-names";
 import { PnLTable } from "./PnLTable";
 import { PnLChart } from "./PnLChart";
 import { SortableChips } from "./SortableChips";
@@ -116,7 +117,12 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
                       : "—";
                     return (
                       <tr key={r.ticker}>
-                        <td style={{ textAlign: "left", color: "var(--teal)", fontWeight: 700 }}>{r.ticker}</td>
+                        <td style={{ textAlign: "left", color: "var(--teal)", fontWeight: 700 }}>
+                          {r.ticker}
+                          {currency === "TWD" && twName(r.ticker) && (
+                            <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400 }}>{twName(r.ticker)}</div>
+                          )}
+                        </td>
                         <td>{r.close !== null ? `${sym}${r.close.toFixed(2)}` : "—"}</td>
                         <td>{r.pm_price !== null ? `${sym}${r.pm_price.toFixed(2)}` : "—"}</td>
                         <td>{timeStr}</td>
@@ -286,7 +292,12 @@ function ManageTab({
                 const displayTotalCost = pos.total_cost ?? pos.avg_cost * pos.shares;
                 return (
                   <tr key={t}>
-                    <td style={{ textAlign: "left", color: "var(--teal)", fontWeight: 700 }}>{t}</td>
+                    <td style={{ textAlign: "left", color: "var(--teal)", fontWeight: 700 }}>
+                      {t}
+                      {currency === "TWD" && twName(t) && (
+                        <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400 }}>{twName(t)}</div>
+                      )}
+                    </td>
                     {isEditing ? (
                       <>
                         <td>
@@ -489,30 +500,37 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
 
       {acctTab === 0 && <OverallTab portfolio={portfolio} refreshKey={refreshKey} />}
 
-      {cur && (
-        <div>
-          <div className="tab-bar">
-            {pnlSubTabs.map((t, i) => (
-              <button key={t} className={`tab-btn${pnlTab === i ? " active" : ""}`} onClick={() => {
-                  setPnlTab(i);
-                  sessionStorage.setItem(`portfolio-pnl-tab-${acctTab}`, String(i));
-                }}>
-                {t}
-              </button>
-            ))}
-          </div>
+      {ACCOUNTS.map((acct, i) => {
+        const isActive = acctTab === i + 1;
+        return (
+          <div key={acct.key} style={isActive ? {} : { visibility: "hidden", height: 0, overflow: "hidden" }}>
+            <div className="tab-bar">
+              {["💰 今日損益", "📝 持倉管理"].map((t, ti) => (
+                <button key={t} className={`tab-btn${pnlTab === ti ? " active" : ""}`} onClick={() => {
+                    setPnlTab(ti);
+                    sessionStorage.setItem(`portfolio-pnl-tab-${i + 1}`, String(ti));
+                  }}>
+                  {t}
+                </button>
+              ))}
+            </div>
 
-          {pnlTab === 0 && <AccountPnL account={cur.key} currency={cur.currency} refreshKey={refreshKey} />}
-          {pnlTab === 1 && (
-            <ManageTab
-              account={cur.key}
-              currency={cur.currency}
-              positions={portfolio[cur.key]?.positions ?? {}}
-              onRefresh={loadPortfolio}
-            />
-          )}
-        </div>
-      )}
+            {/* Always mounted — hidden by parent when inactive; hidden by display when Manage is active */}
+            <div style={{ display: isActive && pnlTab === 1 ? "none" : "block" }}>
+              <AccountPnL account={acct.key} currency={acct.currency} refreshKey={refreshKey} />
+            </div>
+
+            {isActive && pnlTab === 1 && (
+              <ManageTab
+                account={acct.key}
+                currency={acct.currency}
+                positions={portfolio[acct.key]?.positions ?? {}}
+                onRefresh={loadPortfolio}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

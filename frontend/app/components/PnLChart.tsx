@@ -19,6 +19,7 @@ function color(v: number | null) { return v === null ? "#6899b8" : v >= 0 ? POS 
 function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   const data = rows.filter(r => r.price !== null).map(r => ({
     ticker: r.ticker,
+    name: r.name ?? "",
     x: r.pct ?? 0,
     y: r.today_gain ?? 0,
     z: Math.abs((r.price ?? 0) * r.shares),
@@ -59,10 +60,16 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
     return (
       <g>
         <circle cx={cx} cy={cy} r={r} fill={fillColor} fillOpacity={0.82} />
-        <text x={cx} y={cy - r - 5} textAnchor="middle"
+        <text x={cx} y={cy - r - (payload.name ? 15 : 5)} textAnchor="middle"
           fill="#d4eaf5" fontSize={11} fontFamily="Courier New" fontWeight={700}>
           {payload.ticker}
         </text>
+        {payload.name && (
+          <text x={cx} y={cy - r - 3} textAnchor="middle"
+            fill="#6899b8" fontSize={10} fontFamily="Courier New">
+            {payload.name}
+          </text>
+        )}
       </g>
     );
   };
@@ -79,7 +86,7 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
             if (!d) return null;
             return (
               <div style={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", padding: "8px 12px", fontFamily: "Courier New", fontSize: 12 }}>
-                <div style={{ color: "#1ECFD6", fontWeight: 700, marginBottom: 4 }}>{d.ticker}</div>
+                <div style={{ color: "#1ECFD6", fontWeight: 700, marginBottom: 2 }}>{d.ticker}{d.name ? ` ${d.name}` : ""}</div>
                 <div>今日%：{d.x >= 0 ? "+" : ""}{d.x.toFixed(2)}%</div>
                 <div style={{ color: d.y >= 0 ? "#c05640" : "#3daa70" }}>
                   今日損益：{d.y >= 0 ? "+" : ""}{d.y.toFixed(2)}
@@ -105,7 +112,7 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
   const sym = currency === "TWD" ? "NT$" : "$";
 
   const data = [
-    ...sorted.map(r => ({ name: r.ticker, value: r.today_gain ?? 0 })),
+    ...sorted.map(r => ({ name: r.name || r.ticker, value: r.today_gain ?? 0 })),
     { name: "合計", value: total },
   ];
 
@@ -134,25 +141,29 @@ function WaterfallChart({ rows, currency }: { rows: PortfolioRow[]; currency: Cu
 function TreemapChart({ rows }: { rows: PortfolioRow[] }) {
   const data = rows
     .filter(r => r.price !== null)
-    .map(r => ({ name: r.ticker, size: Math.abs((r.price ?? 0) * r.shares), pct: r.pct ?? 0 }));
+    .map(r => ({ name: r.ticker, cnName: r.name ?? "", size: Math.abs((r.price ?? 0) * r.shares), pct: r.pct ?? 0 }));
 
   return (
     <ResponsiveContainer width="100%" height={280}>
       <Treemap data={data} dataKey="size" nameKey="name" aspectRatio={4 / 3}
         content={(props: Record<string, unknown>) => {
-          const { x, y, width, height, name, pct } = props as {
+          const { x, y, width, height, name, cnName, pct } = props as {
             x: number; y: number; width: number; height: number;
-            name?: string; pct?: number;
+            name?: string; cnName?: string; pct?: number;
           };
           // Recharts passes a root wrapper node with no leaf data — skip it
           if (typeof pct !== "number" || !name) return <g />;
+          const showCn = cnName && width > 64 && height > 44;
           return (
             <g>
               <rect x={x} y={y} width={width} height={height} fill={color(pct)} fillOpacity={0.75} stroke="rgba(0,29,58,0.8)" strokeWidth={2} />
               {width > 48 && height > 28 && (
                 <>
-                  <text x={x + width / 2} y={y + height / 2 - 6} textAnchor="middle" fill="#d4eaf5" fontSize={13} fontFamily="Courier New" fontWeight={700}>{name}</text>
-                  <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fill="#d4eaf5" fontSize={12} fontFamily="Courier New">{`${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`}</text>
+                  <text x={x + width / 2} y={y + height / 2 - (showCn ? 14 : 6)} textAnchor="middle" fill="#d4eaf5" fontSize={13} fontFamily="Courier New" fontWeight={700}>{name}</text>
+                  {showCn && (
+                    <text x={x + width / 2} y={y + height / 2 + 2} textAnchor="middle" fill="#d4eaf5" fontSize={10} fontFamily="Courier New">{cnName}</text>
+                  )}
+                  <text x={x + width / 2} y={y + height / 2 + (showCn ? 16 : 10)} textAnchor="middle" fill="#d4eaf5" fontSize={12} fontFamily="Courier New">{`${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`}</text>
                 </>
               )}
             </g>
@@ -167,12 +178,14 @@ function BarChartView({ rows, currency }: { rows: PortfolioRow[]; currency: Curr
   const valid = rows.filter(r => r.today_gain !== null);
   const sorted = [...valid].sort((a, b) => (a.today_gain ?? 0) - (b.today_gain ?? 0));
   const sym = currency === "TWD" ? "NT$" : "$";
+  const hasTwNames = sorted.some(r => r.name);
+  const data = sorted.map(r => ({ ...r, displayName: r.name ? `${r.ticker} ${r.name}` : r.ticker }));
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 36)}>
-      <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 60, left: 10, bottom: 4 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 60, left: 10, bottom: 4 }}>
         <XAxis type="number" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
-        <YAxis type="category" dataKey="ticker" tick={{ fill: "#1ECFD6", fontSize: 11, fontFamily: "Courier New", fontWeight: 700 }} width={55} />
+        <YAxis type="category" dataKey="displayName" tick={{ fill: "#1ECFD6", fontSize: hasTwNames ? 10 : 11, fontFamily: "Courier New", fontWeight: 700 }} width={hasTwNames ? 110 : 55} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
           formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, "今日損益"] as [string, string]; }}

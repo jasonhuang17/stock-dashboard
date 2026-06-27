@@ -44,6 +44,54 @@ _EMPTY_PORTFOLIO = {
 
 _config_lock = threading.Lock()
 
+TW_NAMES: dict = {
+    "0050":  "元大台灣50",
+    "0056":  "元大高股息",
+    "00878": "國泰永續高股息",
+    "00881": "國泰台灣5G+",
+    "1101":  "台泥",
+    "1216":  "統一",
+    "1301":  "台塑",
+    "1303":  "南亞",
+    "1326":  "台化",
+    "2002":  "中鋼",
+    "2207":  "和泰車",
+    "2303":  "聯電",
+    "2308":  "台達電",
+    "2317":  "鴻海",
+    "2330":  "台積電",
+    "2357":  "華碩",
+    "2379":  "瑞昱",
+    "2382":  "廣達",
+    "2395":  "研華",
+    "2412":  "中華電",
+    "2454":  "聯發科",
+    "2609":  "陽明",
+    "2615":  "萬海",
+    "2880":  "華南金",
+    "2881":  "富邦金",
+    "2882":  "國泰金",
+    "2883":  "開發金",
+    "2884":  "玉山金",
+    "2885":  "元大金",
+    "2886":  "兆豐金",
+    "2887":  "台新金",
+    "2888":  "新光金",
+    "2890":  "永豐金",
+    "2891":  "中信金",
+    "2892":  "第一金",
+    "2912":  "統一超",
+    "3008":  "大立光",
+    "3034":  "聯詠",
+    "3037":  "欣興",
+    "3711":  "日月光投控",
+    "4904":  "遠傳",
+    "4938":  "和碩",
+    "5871":  "中租-KY",
+    "6415":  "矽力-KY",
+    "6505":  "台塑化",
+}
+
 
 def load_config() -> tuple[dict, dict]:
     try:
@@ -339,7 +387,8 @@ def _portfolio_rows(account: str) -> list[dict]:
             prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
         cost_basis = (total_cost if total_cost is not None else avg_cost * shares)
         rows.append({
-            "ticker": ticker, "shares": shares, "avg_cost": avg_cost,
+            "ticker": ticker, "name": TW_NAMES.get(ticker, "") if is_twd else "",
+            "shares": shares, "avg_cost": avg_cost,
             "price": price, "pct": pct, "prev_close": prev_close,
             "per_share": per_share, "today_gain": today_gain,
             "unreal_gain": unreal_gain, "unreal_pct": unreal_pct,

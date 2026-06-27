@@ -201,7 +201,12 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                   const needsColor = ["per_share", "today_gain", "unreal_gain"].includes(c.key);
                   return (
                     <td key={c.key} className={needsColor ? colorOf(val) : ""}>
-                      {c.fmt(row)}
+                      {c.key === "ticker" && row.name ? (
+                        <div>
+                          <div>{row.ticker}</div>
+                          <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400, letterSpacing: 0 }}>{row.name}</div>
+                        </div>
+                      ) : c.fmt(row)}
                     </td>
                   );
                 })}
