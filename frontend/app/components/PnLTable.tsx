@@ -19,9 +19,7 @@ interface ColDef {
   fmt: (row: PortfolioRow) => string;
 }
 
-// Both 複委託 accounts share one settings bucket; 台股帳戶 is independent
-const settingsKey = (acct: string) => acct.startsWith("複委託") ? "複委託" : acct;
-const SETTINGS_GROUPS = ["複委託", "台股帳戶"];
+const ALL_ACCOUNTS = ["複委託（台幣戶）", "複委託（美金戶）", "台股帳戶"];
 const SYNC_EVENT = "pnl-cols-sync";
 
 // Only ticker is always shown; everything else is optional
@@ -136,12 +134,11 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const sKey = settingsKey(account);
     api.getSettings().then(s => {
-      const saved = s.pnl_cols?.[sKey];
-      if (saved) {
-        setOptCols(new Set(saved.vis));
-        setColOrder(mergeOrder(saved.order));
+      const acct = s.pnl_cols?.[account];
+      if (acct) {
+        setOptCols(new Set(acct.vis));
+        setColOrder(mergeOrder(acct.order));
       } else if (s.col_vis || s.col_order) {
         // migrate from old flat format
         if (s.col_vis)   setOptCols(new Set(s.col_vis));
@@ -149,9 +146,9 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
       }
     }).catch(() => {});
 
+    // Listen for "apply to all" broadcasts from other tabs
     function onSync(e: Event) {
-      const { group, vis, order } = (e as CustomEvent<{ group: string; vis: string[]; order: string[] }>).detail;
-      if (group !== sKey) return;
+      const { vis, order } = (e as CustomEvent<{ vis: string[]; order: string[] }>).detail;
       setOptCols(new Set(vis));
       setColOrder(mergeOrder(order));
     }
@@ -172,9 +169,7 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   function savePrefs(vis: Set<string>, order: OptColId[]) {
-    const sKey = settingsKey(account);
-    api.setSettings({ pnl_cols: { [sKey]: { vis: [...vis], order } } }).catch(() => {});
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { group: sKey, vis: [...vis], order } }));
+    api.setSettings({ pnl_cols: { [account]: { vis: [...vis], order } } }).catch(() => {});
   }
 
   function toggleOptCol(id: string) {
@@ -199,11 +194,9 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
   function applyToAll() {
     const vis = [...optCols];
     const order = colOrder;
-    const pnl_cols = Object.fromEntries(SETTINGS_GROUPS.map(g => [g, { vis, order }]));
+    const pnl_cols = Object.fromEntries(ALL_ACCOUNTS.map(a => [a, { vis, order }]));
     api.setSettings({ pnl_cols }).catch(() => {});
-    SETTINGS_GROUPS.forEach(g =>
-      window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { group: g, vis, order } }))
-    );
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { vis, order } }));
   }
 
   const cols   = buildCols(currency, optCols, colOrder);
