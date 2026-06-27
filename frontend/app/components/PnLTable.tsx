@@ -271,6 +271,16 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                           <div>{row.ticker}</div>
                           <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400, letterSpacing: 0 }}>{row.name}</div>
                         </div>
+                      ) : c.key === "day_high" && row.price !== null && row.day_high !== null ? (
+                        <div>
+                          <div>{c.fmt(row)}</div>
+                          <div style={{ fontSize: "0.68rem", color: "#A78BFA" }}>▼ {((row.price - row.day_high) / row.day_high * 100).toFixed(2)}%</div>
+                        </div>
+                      ) : c.key === "day_low" && row.price !== null && row.day_low !== null ? (
+                        <div>
+                          <div>{c.fmt(row)}</div>
+                          <div style={{ fontSize: "0.68rem", color: "#5BB8D4" }}>▲ +{((row.price - row.day_low) / row.day_low * 100).toFixed(2)}%</div>
+                        </div>
                       ) : c.fmt(row)}
                     </td>
                   );
