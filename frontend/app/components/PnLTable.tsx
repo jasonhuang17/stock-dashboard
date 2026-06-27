@@ -46,7 +46,7 @@ const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
   { id: "pct",         label: "單股漲跌%",    defaultOn: true  },
   { id: "today_gain",  label: "今日損益",     defaultOn: true  },
   { id: "unreal_gain", label: "未實現損益",   defaultOn: true  },
-  { id: "ytd_gain",    label: "YTD 損益",    defaultOn: false },
+  { id: "ytd_gain",    label: "YTD 漲幅",    defaultOn: false },
   { id: "ytd_pct",     label: "YTD 漲幅%",  defaultOn: false },
 ];
 
@@ -88,7 +88,7 @@ function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[
     }},
     week_high: { key: "week_high" as Col, label: "52W 最高", fmt: r => r.week_high !== null ? `${priceSym}${r.week_high.toFixed(2)}` : "—" },
     week_low:  { key: "week_low"  as Col, label: "52W 最低", fmt: r => r.week_low  !== null ? `${priceSym}${r.week_low.toFixed(2)}`  : "—" },
-    ytd_gain:  { key: "ytd_gain"  as Col, label: `YTD 損益 (${sym})`,  fmt: r => r.ytd_gain !== null ? fmtMoney(r.ytd_gain, currency) : "—" },
+    ytd_gain:  { key: "ytd_gain"  as Col, label: `YTD 漲幅 (${sym})`,  fmt: r => r.ytd_gain !== null ? fmtMoney(r.ytd_gain, currency) : "—" },
     ytd_pct:   { key: "ytd_pct"   as Col, label: "YTD 漲幅%",          fmt: r => r.ytd_pct  !== null ? fmtPct(r.ytd_pct) : "—" },
   };
 

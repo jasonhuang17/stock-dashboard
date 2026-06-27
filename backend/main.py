@@ -313,23 +313,29 @@ def _single_ticker_quote(ticker: str) -> dict:
 
 
 def _fetch_ytd_start(ticker: str) -> "float | None":
-    """First trading-day Close of the current calendar year. Cached 24h."""
+    """First trading-day Close of the current calendar year. Cached 24h (only on success)."""
     with _cache_lock:
         if ticker in _ytd_cache:
             return _ytd_cache[ticker]
     result = None
     try:
         year = datetime.now().year
+        start, end = f"{year}-01-01", f"{year}-01-20"
         t = yf.Ticker(ticker)
-        df = t.history(start=f"{year}-01-01", end=f"{year}-01-15", auto_adjust=False)
+        df = t.history(start=start, end=end, auto_adjust=False)
+        if df.empty:
+            # Some TW ETFs don't respond to Ticker.history() — use yf.download fallback
+            df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
         if not df.empty and "Close" in df.columns:
             closes = df["Close"].dropna()
             if len(closes):
                 result = float(closes.iloc[0])
     except Exception:
         pass
-    with _cache_lock:
-        _ytd_cache[ticker] = result
+    # Only cache successes — None results are retried on next request
+    if result is not None:
+        with _cache_lock:
+            _ytd_cache[ticker] = result
     return result
 
 
