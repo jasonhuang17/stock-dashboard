@@ -297,11 +297,13 @@ def _portfolio_rows(account: str) -> list[dict]:
             unreal_pct = unreal_gain / cost_basis * 100 if cost_basis else 0.0
         else:
             prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
+        cost_basis = (total_cost if total_cost is not None else avg_cost * shares)
         rows.append({
             "ticker": ticker, "shares": shares, "avg_cost": avg_cost,
             "price": price, "pct": pct, "prev_close": prev_close,
             "per_share": per_share, "today_gain": today_gain,
             "unreal_gain": unreal_gain, "unreal_pct": unreal_pct,
+            "cost_basis": cost_basis,
             "day_high": q.get("day_high"), "day_low": q.get("day_low"), "volume": q.get("volume"),
         })
     return rows

@@ -33,9 +33,10 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
-  const totalToday  = rows.reduce((s, r) => s + (r.today_gain ?? 0), 0);
-  const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const totalMV     = rows.reduce((s, r) => s + ((r.price ?? 0) * r.shares), 0);
+  const totalToday     = rows.reduce((s, r) => s + (r.today_gain ?? 0), 0);
+  const totalUnreal    = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const totalMV        = rows.reduce((s, r) => s + ((r.price ?? 0) * r.shares), 0);
+  const totalCostBasis = rows.reduce((s, r) => s + r.cost_basis, 0);
   const prevMV      = rows.reduce((s, r) => {
     const prev = r.prev_close ?? r.price ?? 0;
     return s + prev * r.shares;
@@ -68,6 +69,10 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
           <div>
             <div className="summary-label">未實現損益</div>
             <div className={`summary-value ${totalUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalUnreal, currency)}</div>
+          </div>
+          <div>
+            <div className="summary-label">總成本</div>
+            <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(totalCostBasis, currency)}</div>
           </div>
           <div>
             <div className="summary-label">總市值</div>
@@ -188,8 +193,18 @@ function ManageTab({
   const sym = currency === "TWD" ? "NT$" : "USD";
   const tickers = Object.keys(positions);
 
+  const manageTotalCost = Object.values(positions).reduce((s, p) => s + (p.total_cost ?? p.avg_cost * p.shares), 0);
+
   return (
     <div>
+      {/* Total cost summary */}
+      {tickers.length > 0 && (
+        <div style={{ marginBottom: 16, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em" }}>總成本</span>
+          <span style={{ fontFamily: "Courier New", fontSize: "1rem", color: "var(--text)", fontWeight: 700 }}>{fmtMoney(manageTotalCost, currency)}</span>
+        </div>
+      )}
+
       {/* Add form */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: "0.72rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>

@@ -20,6 +20,7 @@ export interface PortfolioRow {
   today_gain: number | null;
   unreal_gain: number | null;
   unreal_pct: number | null;
+  cost_basis: number;
   day_high: number | null;
   day_low: number | null;
   volume: number | null;
