@@ -69,8 +69,8 @@ export default function Dashboard() {
     sessionStorage.setItem("dashboard-tab", String(i));
   }
   useEffect(() => {
-    if (tab >= tabs.length && tabs.length > 0) handleSetTab(0);
-  }, [tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (groupNames.length > 0 && tab >= tabs.length) handleSetTab(0);
+  }, [groupNames.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ padding: "0.5rem 2rem 2rem", maxWidth: "100%", minHeight: "100vh" }}>
