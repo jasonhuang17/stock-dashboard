@@ -34,6 +34,7 @@ _DEFAULT_GROUPS = {
     "⚡ 槓桿型": ["AAOX", "ONDL", "MUU", "SNXX", "TSMX"],
     "🌐 大盤型": ["VOO", "SPY", "QQQ"],
 }
+_DEFAULT_PINNED = list(_DEFAULT_GROUPS.keys())
 
 _EMPTY_PORTFOLIO = {
     "美股複委託（台幣帳戶）": {"currency": "USD", "positions": {}},
@@ -93,13 +94,20 @@ TW_NAMES: dict = {
 }
 
 
-def load_config() -> tuple[dict, dict]:
+def load_config() -> tuple[dict, dict, list]:
     try:
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
         raw = data.get("group_tickers", data)
         raw_portfolio = data.get("portfolio", {})
-        groups = {k: raw.get(k, list(v)) for k, v in _DEFAULT_GROUPS.items()}
+        pinned = data.get("pinned_groups", list(_DEFAULT_PINNED))
+        # Load all groups (defaults + any user-added)
+        groups: dict = {}
+        for k, v in _DEFAULT_GROUPS.items():
+            groups[k] = raw.get(k, list(v))
+        for k, v in raw.items():
+            if k not in groups and isinstance(v, list):
+                groups[k] = v
         # Migrate old flat portfolio {"TICKER": {"shares":N, "avg_cost":X}}
         if raw_portfolio and "美股複委託（台幣帳戶）" not in raw_portfolio:
             first = next(iter(raw_portfolio.values()), {})
@@ -109,12 +117,12 @@ def load_config() -> tuple[dict, dict]:
                     "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
                     "台股帳戶":         {"currency": "TWD", "positions": {}},
                 }
-        return groups, raw_portfolio or _EMPTY_PORTFOLIO
+        return groups, raw_portfolio or _EMPTY_PORTFOLIO, pinned
     except (FileNotFoundError, json.JSONDecodeError):
-        return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, _EMPTY_PORTFOLIO
+        return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, _EMPTY_PORTFOLIO, list(_DEFAULT_PINNED)
 
 
-def save_config(group_tickers: dict, portfolio: dict) -> None:
+def save_config(group_tickers: dict, portfolio: dict, pinned: list | None = None) -> None:
     with _config_lock:
         try:
             with open(CONFIG_FILE, "r") as f:
@@ -123,6 +131,8 @@ def save_config(group_tickers: dict, portfolio: dict) -> None:
             existing = {}
         existing["group_tickers"] = group_tickers
         existing["portfolio"] = portfolio
+        if pinned is not None:
+            existing["pinned_groups"] = pinned
         with open(CONFIG_FILE, "w") as f:
             json.dump(existing, f, ensure_ascii=False, indent=2)
 
@@ -157,7 +167,7 @@ def active_portfolio() -> dict:
             return data.get("portfolio", _EMPTY_PORTFOLIO)
         except (FileNotFoundError, json.JSONDecodeError):
             return _EMPTY_PORTFOLIO
-    _, portfolio = load_config()
+    _, portfolio, _ = load_config()
     return portfolio
 
 
@@ -170,7 +180,7 @@ def active_groups() -> dict:
             return data.get("group_tickers", {k: list(v) for k, v in _DEFAULT_GROUPS.items()})
         except (FileNotFoundError, json.JSONDecodeError):
             return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}
-    groups, _ = load_config()
+    groups, _, _ = load_config()
     return groups
 
 
@@ -512,9 +522,67 @@ def premarket(tickers: str):
 
 
 # ── Routes: groups ─────────────────────────────────────────────────────────────
+def _groups_response(groups: dict, pinned: list) -> dict:
+    return {"groups": groups, "pinned": pinned}
+
+
 @app.get("/api/groups")
 def get_groups():
-    return active_groups()
+    if load_settings().get("use_mock"):
+        try:
+            with open(DEMO_FILE, "r") as f:
+                data = json.load(f)
+            grps = data.get("group_tickers", {k: list(v) for k, v in _DEFAULT_GROUPS.items()})
+        except (FileNotFoundError, json.JSONDecodeError):
+            grps = {k: list(v) for k, v in _DEFAULT_GROUPS.items()}
+        return _groups_response(grps, list(_DEFAULT_PINNED))
+    groups, _, pinned = load_config()
+    return _groups_response(groups, pinned)
+
+
+class GroupBody(BaseModel):
+    name: str
+
+
+@app.post("/api/groups")
+def create_group(body: GroupBody):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    groups, portfolio, pinned = load_config()
+    if name in groups:
+        raise HTTPException(409, "group already exists")
+    groups[name] = []
+    save_config(groups, portfolio)
+    return _groups_response(groups, pinned)
+
+
+@app.delete("/api/groups/{group_name}")
+def delete_group(group_name: str):
+    groups, portfolio, pinned = load_config()
+    if group_name not in groups:
+        raise HTTPException(404, "group not found")
+    if group_name in pinned:
+        raise HTTPException(403, "cannot delete a pinned group")
+    del groups[group_name]
+    save_config(groups, portfolio)
+    return _groups_response(groups, pinned)
+
+
+@app.patch("/api/groups/{group_name}")
+def rename_group(group_name: str, body: GroupBody):
+    new_name = body.name.strip()
+    if not new_name:
+        raise HTTPException(400, "name required")
+    groups, portfolio, pinned = load_config()
+    if group_name not in groups:
+        raise HTTPException(404, "group not found")
+    if new_name != group_name and new_name in groups:
+        raise HTTPException(409, "group already exists")
+    groups = {(new_name if k == group_name else k): v for k, v in groups.items()}
+    new_pinned = [(new_name if p == group_name else p) for p in pinned]
+    save_config(groups, portfolio, new_pinned)
+    return _groups_response(groups, new_pinned)
 
 
 class TickerBody(BaseModel):
@@ -526,7 +594,7 @@ def add_group_ticker(group_name: str, body: TickerBody):
     ticker = body.ticker.strip().upper()
     if not ticker:
         raise HTTPException(400, "ticker required")
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
     if ticker not in groups[group_name]:
@@ -537,7 +605,7 @@ def add_group_ticker(group_name: str, body: TickerBody):
 
 @app.delete("/api/groups/{group_name}/tickers/{ticker}")
 def remove_group_ticker(group_name: str, ticker: str):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
     groups[group_name] = [t for t in groups[group_name] if t != ticker.upper()]
@@ -551,7 +619,7 @@ class OrderBody(BaseModel):
 
 @app.put("/api/groups/{group_name}/order")
 def reorder_group(group_name: str, body: OrderBody):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
     existing = set(groups[group_name])
@@ -597,7 +665,7 @@ def _build_position(shares: float, avg_cost: float, total_cost: Optional[float])
 
 @app.post("/api/portfolio/{account}/positions")
 def add_position(account: str, body: PositionBody):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
     ticker = body.ticker.strip().upper()
@@ -613,7 +681,7 @@ def add_position(account: str, body: PositionBody):
 
 @app.put("/api/portfolio/{account}/positions/{ticker}")
 def update_position(account: str, ticker: str, body: PositionBody):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
     t = ticker.upper()
@@ -626,7 +694,7 @@ def update_position(account: str, ticker: str, body: PositionBody):
 
 @app.delete("/api/portfolio/{account}/positions/{ticker}")
 def delete_position(account: str, ticker: str):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
     t = ticker.upper()
@@ -639,7 +707,7 @@ def delete_position(account: str, ticker: str):
 
 @app.put("/api/portfolio/{account}/order")
 def reorder_portfolio(account: str, body: OrderBody):
-    groups, portfolio = load_config()
+    groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
     positions = portfolio[account]["positions"]

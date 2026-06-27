@@ -28,6 +28,16 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path} → ${res.status}`);
+  return res.json();
+}
+
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
@@ -44,7 +54,17 @@ export const api = {
   premarket: (tickers: string[]) =>
     get<PremarketQuote[]>(`/api/premarket?tickers=${tickers.join(",")}`),
 
-  groups: () => get<Groups>("/api/groups"),
+  groups: () =>
+    get<{ groups: Groups; pinned: string[] }>("/api/groups"),
+
+  createGroup: (name: string) =>
+    post<{ groups: Groups; pinned: string[] }>("/api/groups", { name }),
+
+  deleteGroup: (name: string) =>
+    del<{ groups: Groups; pinned: string[] }>(`/api/groups/${encodeURIComponent(name)}`),
+
+  renameGroup: (name: string, newName: string) =>
+    patch<{ groups: Groups; pinned: string[] }>(`/api/groups/${encodeURIComponent(name)}`, { name: newName }),
 
   addGroupTicker: (group: string, ticker: string) =>
     post<{ tickers: string[] }>(`/api/groups/${encodeURIComponent(group)}/tickers`, { ticker }),
