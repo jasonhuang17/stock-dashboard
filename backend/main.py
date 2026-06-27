@@ -190,8 +190,11 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
         retry = {r["ticker"]: r for r in (_single_ticker_quote(t) for t in missing)}
         out = [retry.get(r["ticker"], r) if r["price"] is None else r for r in out]
 
-    with _cache_lock:
-        _quotes_cache[tickers] = out
+    # Only cache when at least one ticker has a price; if all are None (yfinance
+    # startup hiccup), skip caching so the next request retries immediately.
+    if any(r["price"] is not None for r in out):
+        with _cache_lock:
+            _quotes_cache[tickers] = out
     return out
 
 
@@ -241,8 +244,9 @@ def _fetch_premarket(tickers: tuple) -> list[dict]:
         out.append({"ticker": t, "price": price, "pct": pct,
                     "prev_close": prev_close, "time": ts})
 
-    with _cache_lock:
-        _premarket_cache[tickers] = out
+    if any(r["prev_close"] is not None for r in out):
+        with _cache_lock:
+            _premarket_cache[tickers] = out
     return out
 
 
