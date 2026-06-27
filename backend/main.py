@@ -40,6 +40,33 @@ _EMPTY_PORTFOLIO = {
     "台股帳戶":         {"currency": "TWD", "positions": {}},
 }
 
+_MOCK_PORTFOLIO = {
+    "複委託（台幣戶）": {
+        "currency": "USD",
+        "positions": {
+            "AAPL":  {"shares": 50,   "avg_cost": 175.23, "total_cost": 8761.50},
+            "NVDA":  {"shares": 20,   "avg_cost": 481.60, "total_cost": 9632.00},
+            "TSLA":  {"shares": 30,   "avg_cost": 218.45, "total_cost": 6553.50},
+        },
+    },
+    "複委託（美金戶）": {
+        "currency": "USD",
+        "positions": {
+            "GOOGL": {"shares": 40,   "avg_cost": 163.80, "total_cost": 6552.00},
+            "AMZN":  {"shares": 25,   "avg_cost": 186.50, "total_cost": 4662.50},
+            "VOO":   {"shares": 10,   "avg_cost": 490.00, "total_cost": 4900.00},
+        },
+    },
+    "台股帳戶": {
+        "currency": "TWD",
+        "positions": {
+            "2330":  {"shares": 1000, "avg_cost": 852.00, "total_cost": 852000.0},
+            "2317":  {"shares": 2000, "avg_cost": 104.50, "total_cost": 209000.0},
+            "00878": {"shares": 5000, "avg_cost": 21.80,  "total_cost": 109000.0},
+        },
+    },
+}
+
 _config_lock = threading.Lock()
 
 
@@ -66,11 +93,44 @@ def load_config() -> tuple[dict, dict]:
 
 def save_config(group_tickers: dict, portfolio: dict) -> None:
     with _config_lock:
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                existing = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing = {}
+        existing["group_tickers"] = group_tickers
+        existing["portfolio"] = portfolio
         with open(CONFIG_FILE, "w") as f:
-            json.dump(
-                {"group_tickers": group_tickers, "portfolio": portfolio},
-                f, ensure_ascii=False, indent=2,
-            )
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+
+
+def load_settings() -> dict:
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+        return data.get("settings", {"use_mock": False})
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"use_mock": False}
+
+
+def save_settings(settings: dict) -> None:
+    with _config_lock:
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                existing = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing = {}
+        existing["settings"] = settings
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+
+
+def active_portfolio() -> dict:
+    """Return mock or real portfolio depending on settings."""
+    if load_settings().get("use_mock"):
+        return _MOCK_PORTFOLIO
+    _, portfolio = load_config()
+    return portfolio
 
 
 # ── Caches ────────────────────────────────────────────────────────────────────
@@ -265,7 +325,7 @@ def _ticker_exists_tw(bare: str) -> bool:
 
 
 def _portfolio_rows(account: str) -> list[dict]:
-    _, portfolio = load_config()
+    portfolio = active_portfolio()
     acct = portfolio.get(account, {})
     positions = acct.get("positions", {})
     if not positions:
@@ -310,7 +370,7 @@ def _portfolio_rows(account: str) -> list[dict]:
 
 
 def _portfolio_premarket_rows(account: str) -> list[dict]:
-    _, portfolio = load_config()
+    portfolio = active_portfolio()
     acct = portfolio.get(account, {})
     positions = acct.get("positions", {})
     if not positions:
@@ -357,6 +417,23 @@ def _strip_tw_suffix(ticker: str) -> str:
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+class SettingsBody(BaseModel):
+    use_mock: bool
+
+
+@app.get("/api/settings")
+def get_settings():
+    return load_settings()
+
+
+@app.put("/api/settings")
+def put_settings(body: SettingsBody):
+    s = load_settings()
+    s["use_mock"] = body.use_mock
+    save_settings(s)
+    return s
 
 
 @app.get("/api/market-status")
@@ -436,7 +513,7 @@ def reorder_group(group_name: str, body: OrderBody):
 # ── Routes: portfolio ──────────────────────────────────────────────────────────
 @app.get("/api/portfolio")
 def get_portfolio():
-    _, portfolio = load_config()
+    portfolio = active_portfolio()
     return portfolio
 
 

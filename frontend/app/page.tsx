@@ -20,14 +20,16 @@ export default function Dashboard() {
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [refreshKey, setRefreshKey] = useState(0);  // bump to force child re-fetch
   const [scrolled, setScrolled] = useState(false);
+  const [useMock, setUseMock] = useState(false);
   const cdRef = useRef(REFRESH_INTERVAL);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadMeta = useCallback(async () => {
     try {
-      const [g, s] = await Promise.all([api.groups(), api.marketStatus()]);
+      const [g, s, settings] = await Promise.all([api.groups(), api.marketStatus(), api.getSettings()]);
       setGroups(g);
       setStatus(s);
+      setUseMock(settings.use_mock);
     } catch { /* silent */ }
   }, []);
 
@@ -53,6 +55,13 @@ export default function Dashboard() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  async function handleToggleMock() {
+    const next = !useMock;
+    setUseMock(next);
+    await api.setSettings(next);
+    setRefreshKey(k => k + 1);
+  }
 
   function handleRefresh() {
     cdRef.current = REFRESH_INTERVAL;
@@ -92,7 +101,22 @@ export default function Dashboard() {
             <span style={{ color: "#475569", fontSize: "0.78rem" }}>ET {status.time}</span>
           )}
         </div>
-        <button className="dash-btn" onClick={handleRefresh}>↻ REFRESH</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={handleToggleMock}
+            style={{
+              fontFamily: "Courier New", fontSize: "0.68rem", fontWeight: 700,
+              letterSpacing: "0.08em", padding: "3px 10px", borderRadius: 20,
+              border: `1px solid ${useMock ? "rgba(237,209,112,0.6)" : "rgba(8,120,164,0.4)"}`,
+              background: useMock ? "rgba(237,209,112,0.12)" : "transparent",
+              color: useMock ? "var(--gold)" : "var(--dim)",
+              cursor: "pointer",
+            }}
+          >
+            {useMock ? "◈ DEMO" : "DEMO"}
+          </button>
+          <button className="dash-btn" onClick={handleRefresh}>↻ REFRESH</button>
+        </div>
       </div>
 
       {/* Countdown */}
