@@ -39,6 +39,7 @@ export interface PremarketPortfolioRow {
 export interface Position {
   shares: number;
   avg_cost: number;
+  total_cost?: number;
 }
 
 export interface Account {

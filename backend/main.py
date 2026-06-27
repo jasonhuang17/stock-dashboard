@@ -8,8 +8,6 @@ import os
 import threading
 from datetime import datetime
 from typing import Optional
-
-import pandas as pd
 import pytz
 import yfinance as yf
 from cachetools import TTLCache
@@ -120,36 +118,23 @@ def _market_status() -> tuple[str, datetime]:
     return "CLOSED", now
 
 
-# ── Data helpers ──────────────────────────────────────────────────────────────
-def _extract_field_series(raw: "pd.DataFrame", ticker: str, field: str) -> "Optional[pd.Series]":
-    """Extract any OHLCV field series for one ticker from a yf.download() result."""
-    try:
-        if isinstance(raw.columns, pd.MultiIndex):
-            field_df = raw[field]
-            if isinstance(field_df, pd.DataFrame):
-                return field_df[ticker] if ticker in field_df.columns else None
-            return field_df
-        else:
-            return raw[field]
-    except Exception:
-        return None
-
-
-def _extract_close_series(raw: "pd.DataFrame", ticker: str) -> "Optional[pd.Series]":
-    return _extract_field_series(raw, ticker, "Close")
-
 
 def _single_ticker_quote(ticker: str) -> dict:
-    """Download one ticker via yf.Ticker().history() — independent session, no batch pollution."""
+    """Fetch quote via fast_info (real-time endpoint) for price/pct/prev_close,
+    and history() for day_high/day_low/volume."""
     base = {"ticker": ticker, "price": None, "pct": None,
             "day_high": None, "day_low": None, "volume": None}
     try:
-        raw = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=True)
+        t = yf.Ticker(ticker)
+        fi = t.fast_info
+        price = fi.get("lastPrice") or fi.get("regularMarketPrice")
+        prev  = fi.get("regularMarketPreviousClose") or fi.get("previousClose")
+        if price and prev:
+            base["price"] = float(price)
+            base["pct"]   = (float(price) - float(prev)) / float(prev) * 100
+        # day_high / day_low / volume from history (fast_info day_high/low can lag)
+        raw = t.history(period="2d", interval="1d", auto_adjust=False)
         if not raw.empty:
-            closes = raw["Close"].dropna()
-            if len(closes) >= 2:
-                prev, curr = float(closes.iloc[-2]), float(closes.iloc[-1])
-                base.update(price=curr, pct=(curr - prev) / prev * 100)
             for field, key in (("High", "day_high"), ("Low", "day_low"), ("Volume", "volume")):
                 if field in raw.columns:
                     s = raw[field].dropna()
@@ -190,57 +175,40 @@ def _fetch_premarket(tickers: tuple) -> list[dict]:
             _log_quotes("premarket", cached, cached=True)
             return cached
 
-    et = pytz.timezone("America/New_York")
-    try:
-        raw = yf.download(
-            list(tickers), period="1d", interval="1m",
-            auto_adjust=True, prepost=True, progress=False, threads=True,
-        )
-        daily = yf.download(
-            list(tickers), period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-    except Exception:
-        return [{"ticker": t, "price": None, "pct": None, "prev_close": None, "time": None}
-                for t in tickers]
+    out = [_single_ticker_premarket(t) for t in tickers]
 
-    out = []
-    for t in tickers:
-        price = pct = prev_close = ts = None
-        try:
-            dc = _extract_close_series(daily, t)
-            if dc is not None:
-                dc = dc.dropna()
-                if len(dc) >= 2:
-                    prev_close = float(dc.iloc[-2])
-                elif len(dc) == 1:
-                    prev_close = float(dc.iloc[-1])
-
-            mc = _extract_close_series(raw, t)
-            if mc is not None:
-                mc = mc.dropna()
-                if len(mc) >= 1:
-                    price = float(mc.iloc[-1])
-                    ts = mc.index[-1].astimezone(et).isoformat()
-                    if prev_close:
-                        pct = (price - prev_close) / prev_close * 100
-        except Exception:
-            pass
-        out.append({"ticker": t, "price": price, "pct": pct,
-                    "prev_close": prev_close, "time": ts})
-
-    pm_fresh = False
-    try:
-        last_date = pd.Timestamp(daily.index[-1]).date()
-        today_et = datetime.now(pytz.timezone("America/New_York")).date()
-        pm_fresh = (today_et - last_date).days <= 5
-    except Exception:
-        pm_fresh = True
-    if any(r["prev_close"] is not None for r in out) and pm_fresh:
+    if any(r["prev_close"] is not None for r in out):
         with _cache_lock:
             _premarket_cache[tickers] = out
     _log_quotes("premarket", out, cached=False)
     return out
+
+
+def _single_ticker_premarket(ticker: str) -> dict:
+    """Fetch pre/after-hours price + prev close via independent Ticker instances."""
+    et = pytz.timezone("America/New_York")
+    base = {"ticker": ticker, "price": None, "pct": None, "prev_close": None, "time": None}
+    try:
+        daily = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False)
+        if not daily.empty:
+            closes = daily["Close"].dropna()
+            if len(closes) >= 2:
+                base["prev_close"] = float(closes.iloc[-2])
+            elif len(closes) == 1:
+                base["prev_close"] = float(closes.iloc[-1])
+
+        intraday = yf.Ticker(ticker).history(period="1d", interval="1m",
+                                              prepost=True, auto_adjust=False)
+        if not intraday.empty:
+            mc = intraday["Close"].dropna()
+            if len(mc) >= 1:
+                base["price"] = float(mc.iloc[-1])
+                base["time"] = mc.index[-1].astimezone(et).isoformat()
+                if base["prev_close"]:
+                    base["pct"] = (base["price"] - base["prev_close"]) / base["prev_close"] * 100
+    except Exception:
+        pass
+    return base
 
 
 def _resolve_tw_ticker(bare: str) -> str:
@@ -319,12 +287,14 @@ def _portfolio_rows(account: str) -> list[dict]:
         pct = q.get("pct")
         shares = pos["shares"]
         avg_cost = pos["avg_cost"]
+        total_cost = pos.get("total_cost")
         if price is not None and pct is not None:
             prev_close = price / (1 + pct / 100)
             per_share = price - prev_close
             today_gain = per_share * shares
-            unreal_gain = (price - avg_cost) * shares
-            unreal_pct = (price - avg_cost) / avg_cost * 100 if avg_cost else 0.0
+            cost_basis = total_cost if total_cost is not None else avg_cost * shares
+            unreal_gain = price * shares - cost_basis
+            unreal_pct = unreal_gain / cost_basis * 100 if cost_basis else 0.0
         else:
             prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
         rows.append({
@@ -482,6 +452,15 @@ class PositionBody(BaseModel):
     ticker: str
     shares: float
     avg_cost: float
+    total_cost: Optional[float] = None
+
+
+def _build_position(shares: float, avg_cost: float, total_cost: Optional[float]) -> dict:
+    pos: dict = {"shares": shares, "avg_cost": avg_cost}
+    if total_cost is not None:
+        pos["total_cost"] = total_cost
+        pos["avg_cost"] = total_cost / shares  # keep avg_cost in sync at full precision
+    return pos
 
 
 @app.post("/api/portfolio/{account}/positions")
@@ -495,10 +474,7 @@ def add_position(account: str, body: PositionBody):
         ticker = _strip_tw_suffix(ticker)
     if ticker in portfolio[account]["positions"]:
         raise HTTPException(409, "ticker already exists; use PUT to update")
-    portfolio[account]["positions"][ticker] = {
-        "shares": body.shares,
-        "avg_cost": body.avg_cost,
-    }
+    portfolio[account]["positions"][ticker] = _build_position(body.shares, body.avg_cost, body.total_cost)
     save_config(groups, portfolio)
     return portfolio[account]["positions"][ticker]
 
@@ -511,10 +487,7 @@ def update_position(account: str, ticker: str, body: PositionBody):
     t = ticker.upper()
     if t not in portfolio[account]["positions"]:
         raise HTTPException(404, "position not found")
-    portfolio[account]["positions"][t] = {
-        "shares": body.shares,
-        "avg_cost": body.avg_cost,
-    }
+    portfolio[account]["positions"][t] = _build_position(body.shares, body.avg_cost, body.total_cost)
     save_config(groups, portfolio)
     return portfolio[account]["positions"][t]
 

@@ -24,6 +24,32 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
     z: Math.abs((r.price ?? 0) * r.shares),
   }));
 
+  // Pad domains so edge bubbles don't overflow the plot area.
+  // Y needs ~30%: the largest bubble radius is ~23% of plot height.
+  const xs = data.map(d => d.x);
+  const ys = data.map(d => d.y);
+  const xMin = Math.min(...xs, 0), xMax = Math.max(...xs, 0);
+  const yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 0);
+  const xPad = Math.max((xMax - xMin) * 0.22, 1);
+  const yPad = Math.max((yMax - yMin) * 0.30, 1);
+  const xDomain: [number, number] = [xMin - xPad, xMax + xPad];
+  const yDomainPadded: [number, number] = [yMin - yPad, yMax + yPad];
+
+  // Power-of-10 ticks targeting ~5 intervals, minimum base 10 (integers only).
+  // Using round(log10(range/5)) picks the right magnitude; floor() gives too many ticks,
+  // ceil() too few — round() hits ~4-6 every time.
+  const yRange = Math.max(yDomainPadded[1] - yDomainPadded[0], 20);
+  const yBase = Math.pow(10, Math.max(1, Math.round(Math.log10(yRange / 5))));
+  const yTickMin = Math.floor(yDomainPadded[0] / yBase) * yBase;
+  const yTickMax = Math.ceil(yDomainPadded[1] / yBase) * yBase;
+  const yTicks: number[] = [];
+  for (let t = yTickMin; t <= yTickMax + 0.01; t += yBase) yTicks.push(Math.round(t));
+  // Expand domain to cover all ticks so none are clipped
+  const yDomain: [number, number] = [
+    Math.min(yDomainPadded[0], yTickMin),
+    Math.max(yDomainPadded[1], yTickMax),
+  ];
+
   type DotEntry = typeof data[0];
 
   const renderDot = (props: Record<string, unknown>) => {
@@ -42,10 +68,10 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
   };
 
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <ScatterChart margin={{ top: 24, right: 20, bottom: 20, left: 10 }}>
-        <XAxis dataKey="x" type="number" name="今日%" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
-        <YAxis dataKey="y" type="number" name="今日損益" tick={{ fill: "#6899b8", fontSize: 11 }} />
+    <ResponsiveContainer width="100%" height={340}>
+      <ScatterChart margin={{ top: 48, right: 60, bottom: 24, left: 16 }}>
+        <XAxis dataKey="x" type="number" name="今日%" domain={xDomain} tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+        <YAxis dataKey="y" type="number" name="今日損益" domain={yDomain} ticks={yTicks} tickFormatter={v => v.toLocaleString()} tick={{ fill: "#6899b8", fontSize: 11 }} />
         <Tooltip
           cursor={{ stroke: "rgba(30,207,214,0.2)" }}
           content={({ payload: pl }) => {
@@ -62,7 +88,7 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
             );
           }}
         />
-        <ZAxis dataKey="z" range={[400, 3000]} />
+        <ZAxis dataKey="z" range={[1600, 12000]} />
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.3)" />
         <ReferenceLine y={0} stroke="rgba(8,120,164,0.3)" />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

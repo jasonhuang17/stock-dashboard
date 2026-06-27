@@ -43,7 +43,7 @@ function buildCols(currency: Currency, optCols: Set<string>): ColDef[] {
     { key: "shares",      label: "股數",
       fmt: r => r.shares.toLocaleString() },
     { key: "avg_cost",    label: `成本 (${sym})`,
-      fmt: r => r.avg_cost.toFixed(2) },
+      fmt: r => r.avg_cost.toFixed(3) },
     { key: "price",       label: "現價",
       fmt: r => r.price !== null ? `${priceSym}${r.price.toFixed(2)}` : "—" },
   ];
@@ -67,7 +67,7 @@ function buildCols(currency: Currency, optCols: Set<string>): ColDef[] {
         return `${sign}${priceSym}${Math.abs(r.per_share).toFixed(perShareDecimals)}${pctPart}`;
       },
     },
-    { key: "today_gain",  label: `今日損益 (${sym})`,
+    { key: "today_gain",  label: `今日總損益 (${sym})`,
       fmt: r => r.today_gain !== null ? fmtMoney(r.today_gain, currency) : "—" },
     { key: "unreal_gain", label: "未實現損益",
       fmt: r => {

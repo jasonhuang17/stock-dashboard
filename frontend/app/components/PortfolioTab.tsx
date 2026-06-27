@@ -13,10 +13,11 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
   const [rows, setRows] = useState<PortfolioRow[]>([]);
   const [ahRows, setAhRows] = useState<PremarketPortfolioRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showAH, setShowAH] = useState(false);
 
   const fetchRows = useCallback(async () => {
-    setLoading(true);
+    setRefreshing(true);
     try {
       const [r, ah] = await Promise.all([
         api.portfolioRows(account),
@@ -26,6 +27,7 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
       setAhRows(ah);
     } catch { /* silent */ }
     setLoading(false);
+    setRefreshing(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, refreshKey]);
 
@@ -47,7 +49,12 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
   return (
     <div>
       {hasData && (
-        <div className="summary-bar">
+        <div className="summary-bar" style={{ position: "relative" }}>
+          {refreshing && (
+            <span style={{ position: "absolute", top: 6, right: 8, fontSize: "0.65rem", color: "var(--dim)" }}>
+              <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+            </span>
+          )}
           <div>
             <div className="summary-label">今日損益</div>
             <div className={`summary-value ${totalToday >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalToday, currency)}</div>
@@ -131,33 +138,41 @@ function ManageTab({
 }: {
   account: string;
   currency: Currency;
-  positions: Record<string, { shares: number; avg_cost: number }>;
+  positions: Record<string, { shares: number; avg_cost: number; total_cost?: number }>;
   onRefresh: () => void;
 }) {
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
   const [cost, setCost] = useState("");
+  const [totalCost, setTotalCost] = useState("");
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
 
   const [editTicker, setEditTicker] = useState<string | null>(null);
   const [editShares, setEditShares] = useState("");
   const [editCost, setEditCost] = useState("");
+  const [editTotalCost, setEditTotalCost] = useState("");
 
   const [showSort, setShowSort] = useState(false);
 
   async function handleAdd() {
     const t = ticker.trim().toUpperCase();
-    if (!t || !shares || !cost) { setErr("欄位不得為空"); return; }
-    const sh = parseFloat(shares), av = parseFloat(cost);
+    if (!t || !shares || (!cost && !totalCost)) { setErr("請填代號、股數和成本（擇一填寫即可）"); return; }
+    const sh = parseFloat(shares);
+    const av = parseFloat(cost) || (parseFloat(totalCost) / sh);
+    const tc = totalCost ? parseFloat(totalCost) : undefined;
     if (isNaN(sh) || isNaN(av) || sh <= 0 || av <= 0) { setErr("股數/成本必須為正數"); return; }
+    if (cost && totalCost) {
+      const implied = av * sh, diff = Math.abs(implied - parseFloat(totalCost)) / parseFloat(totalCost);
+      if (diff > 0.01) { setErr(`單股成本×股數 (${implied.toFixed(2)}) 與總成本 (${totalCost}) 相差超過 1%，請確認`); return; }
+    }
     setAdding(true); setErr("");
     try {
       const validate = currency === "TWD" ? api.validateTW(t) : api.validateUS(t);
       const { exists } = await validate;
       if (!exists) { setErr(`找不到代號 ${t}`); setAdding(false); return; }
-      await api.addPosition(account, t, sh, av);
-      setTicker(""); setShares(""); setCost("");
+      await api.addPosition(account, t, sh, av, tc);
+      setTicker(""); setShares(""); setCost(""); setTotalCost("");
       onRefresh();
     } catch (e: unknown) { setErr((e as Error).message); }
     setAdding(false);
@@ -169,9 +184,15 @@ function ManageTab({
   }
 
   async function handleEdit(t: string) {
-    const sh = parseFloat(editShares), av = parseFloat(editCost);
+    const sh = parseFloat(editShares);
+    const av = parseFloat(editCost) || (parseFloat(editTotalCost) / sh);
+    const tc = editTotalCost ? parseFloat(editTotalCost) : undefined;
     if (isNaN(sh) || isNaN(av) || sh <= 0 || av <= 0) return;
-    try { await api.updatePosition(account, t, sh, av); setEditTicker(null); onRefresh(); } catch { /* silent */ }
+    if (editCost && editTotalCost) {
+      const implied = av * sh, diff = Math.abs(implied - parseFloat(editTotalCost)) / parseFloat(editTotalCost);
+      if (diff > 0.01) { alert(`單股成本×股數 (${implied.toFixed(2)}) 與總成本 (${editTotalCost}) 相差超過 1%，請確認`); return; }
+    }
+    try { await api.updatePosition(account, t, sh, av, tc); setEditTicker(null); onRefresh(); } catch { /* silent */ }
   }
 
   async function handleReorder(newOrder: string[]) {
@@ -180,6 +201,26 @@ function ManageTab({
 
   const sym = currency === "TWD" ? "NT$" : "USD";
   const tickers = Object.keys(positions);
+
+  const sh = parseFloat(shares);
+  const addAvgHint = !cost && totalCost ? (() => {
+    const tc = parseFloat(totalCost);
+    return (!isNaN(sh) && !isNaN(tc) && sh > 0) ? (tc / sh).toFixed(3) : null;
+  })() : null;
+  const addTcHint = !totalCost && cost ? (() => {
+    const av = parseFloat(cost);
+    return (!isNaN(sh) && !isNaN(av) && sh > 0) ? (av * sh).toFixed(2) : null;
+  })() : null;
+
+  const esh = parseFloat(editShares);
+  const editAvgHint = !editCost && editTotalCost ? (() => {
+    const tc = parseFloat(editTotalCost);
+    return (!isNaN(esh) && !isNaN(tc) && esh > 0) ? (tc / esh).toFixed(3) : null;
+  })() : null;
+  const editTcHint = !editTotalCost && editCost ? (() => {
+    const av = parseFloat(editCost);
+    return (!isNaN(esh) && !isNaN(av) && esh > 0) ? (av * esh).toFixed(2) : null;
+  })() : null;
 
   return (
     <div>
@@ -202,10 +243,20 @@ function ManageTab({
               onKeyDown={e => e.key === "Enter" && handleAdd()} />
           </div>
           <div>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>平均成本 ({sym})</div>
-            <input className="dash-input" style={{ width: 110 }} placeholder="150.00"
-              type="number" step="0.01" value={cost} onChange={e => setCost(e.target.value)}
+            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>單股成本 ({sym})</div>
+            <input className="dash-input" style={{ width: 110 }} placeholder="150.000"
+              type="number" step="0.001" value={cost}
+              onChange={e => setCost(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleAdd()} />
+            {addAvgHint && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>≈ {addAvgHint}</div>}
+          </div>
+          <div>
+            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>總成本 ({sym})</div>
+            <input className="dash-input" style={{ width: 110 }} placeholder="15000.00"
+              type="number" step="0.01" value={totalCost}
+              onChange={e => setTotalCost(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAdd()} />
+            {addTcHint && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>≈ {addTcHint}</div>}
           </div>
           <button className="dash-btn" onClick={handleAdd} disabled={adding} style={{ marginBottom: 0, alignSelf: "flex-end" }}>
             {adding ? <span className="spinner" /> : "+ 新增"}
@@ -222,7 +273,8 @@ function ManageTab({
               <tr>
                 <th style={{ textAlign: "left" }}>代號</th>
                 <th>股數</th>
-                <th>平均成本 ({sym})</th>
+                <th>單股成本 ({sym})</th>
+                <th>總成本 ({sym})</th>
                 <th style={{ textAlign: "left", width: 120 }}></th>
               </tr>
             </thead>
@@ -230,6 +282,8 @@ function ManageTab({
               {tickers.map(t => {
                 const pos = positions[t];
                 const isEditing = editTicker === t;
+                const displayAvgCost = pos.total_cost != null ? (pos.total_cost / pos.shares) : pos.avg_cost;
+                const displayTotalCost = pos.total_cost ?? pos.avg_cost * pos.shares;
                 return (
                   <tr key={t}>
                     <td style={{ textAlign: "left", color: "var(--teal)", fontWeight: 700 }}>{t}</td>
@@ -240,8 +294,14 @@ function ManageTab({
                             value={editShares} onChange={e => setEditShares(e.target.value)} />
                         </td>
                         <td>
-                          <input className="dash-input" style={{ width: 100 }} type="number" step="0.01"
+                          <input className="dash-input" style={{ width: 100 }} type="number" step="0.001"
                             value={editCost} onChange={e => setEditCost(e.target.value)} />
+                          {editAvgHint && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>≈ {editAvgHint}</div>}
+                        </td>
+                        <td>
+                          <input className="dash-input" style={{ width: 110 }} type="number" step="0.01"
+                            value={editTotalCost} onChange={e => setEditTotalCost(e.target.value)} />
+                          {editTcHint && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>≈ {editTcHint}</div>}
                         </td>
                         <td style={{ textAlign: "left" }}>
                           <div style={{ display: "flex", gap: 6 }}>
@@ -253,13 +313,15 @@ function ManageTab({
                     ) : (
                       <>
                         <td>{pos.shares.toLocaleString()}</td>
-                        <td>{pos.avg_cost.toFixed(2)}</td>
+                        <td>{displayAvgCost.toFixed(3)}</td>
+                        <td>{displayTotalCost.toFixed(2)}</td>
                         <td style={{ textAlign: "left" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button className="dash-btn dash-btn-sm" onClick={() => {
                               setEditTicker(t);
                               setEditShares(String(pos.shares));
-                              setEditCost(String(pos.avg_cost));
+                              setEditCost(displayAvgCost.toFixed(6));
+                              setEditTotalCost(displayTotalCost.toFixed(2));
                             }}>編輯</button>
                             <button className="dash-btn dash-btn-sm dash-btn-danger" onClick={() => handleDelete(t)}>刪除</button>
                           </div>

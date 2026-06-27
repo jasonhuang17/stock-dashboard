@@ -63,15 +63,15 @@ export const api = {
   portfolioPremarketRows: (account: string) =>
     get<PremarketPortfolioRow[]>(`/api/portfolio/${encodeURIComponent(account)}/premarket-rows`),
 
-  addPosition: (account: string, ticker: string, shares: number, avg_cost: number) =>
+  addPosition: (account: string, ticker: string, shares: number, avg_cost: number, total_cost?: number) =>
     post<Position>(`/api/portfolio/${encodeURIComponent(account)}/positions`, {
-      ticker, shares, avg_cost,
+      ticker, shares, avg_cost, ...(total_cost !== undefined ? { total_cost } : {}),
     }),
 
-  updatePosition: (account: string, ticker: string, shares: number, avg_cost: number) =>
+  updatePosition: (account: string, ticker: string, shares: number, avg_cost: number, total_cost?: number) =>
     put<Position>(
       `/api/portfolio/${encodeURIComponent(account)}/positions/${encodeURIComponent(ticker)}`,
-      { ticker, shares, avg_cost },
+      { ticker, shares, avg_cost, ...(total_cost !== undefined ? { total_cost } : {}) },
     ),
 
   deletePosition: (account: string, ticker: string) =>
