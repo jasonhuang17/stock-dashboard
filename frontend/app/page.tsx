@@ -14,10 +14,7 @@ function statusClass(s: MarketStatus) {
 }
 
 export default function Dashboard() {
-  const [tab, setTab] = useState(() => {
-    if (typeof window === "undefined") return 0;
-    return parseInt(sessionStorage.getItem("dashboard-tab") ?? "0", 10) || 0;
-  });
+  const [tab, setTab] = useState(0);
   const [groups, setGroups] = useState<Groups>({});
   const [status, setStatus] = useState<{ status: MarketStatus; time: string } | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
@@ -59,6 +56,12 @@ export default function Dashboard() {
 
   const groupNames = Object.keys(groups);
   const tabs = ["💼 持倉", ...groupNames];
+
+  // Restore tab from sessionStorage after hydration
+  useEffect(() => {
+    const saved = parseInt(sessionStorage.getItem("dashboard-tab") ?? "0", 10) || 0;
+    if (saved > 0) setTab(saved);
+  }, []);
 
   // Clamp tab to valid range after groups load; save on every change
   function handleSetTab(i: number) {
