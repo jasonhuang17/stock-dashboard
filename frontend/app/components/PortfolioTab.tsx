@@ -386,6 +386,11 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
   const [acctTab, setAcctTab] = useState(0);
   const [pnlTab, setPnlTab] = useState(0);
 
+  useEffect(() => {
+    const a = parseInt(sessionStorage.getItem("portfolio-acct-tab") ?? "0", 10) || 0;
+    if (a > 0) setAcctTab(a);
+  }, []);
+
   const ACCOUNTS: { key: string; label: string; currency: Currency }[] = [
     { key: "複委託（台幣戶）", label: "🏦 複委託（台幣戶）", currency: "USD" },
     { key: "複委託（美金戶）", label: "🏦 複委託（美金戶）", currency: "USD" },
@@ -409,7 +414,7 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
       {/* Account tabs */}
       <div className="tab-bar">
         {acctTabs.map((a, i) => (
-          <button key={a.key} className={`tab-btn${acctTab === i ? " active" : ""}`} onClick={() => { setAcctTab(i); setPnlTab(0); }}>
+          <button key={a.key} className={`tab-btn${acctTab === i ? " active" : ""}`} onClick={() => { setAcctTab(i); setPnlTab(0); sessionStorage.setItem("portfolio-acct-tab", String(i)); }}>
             {a.label}
           </button>
         ))}
