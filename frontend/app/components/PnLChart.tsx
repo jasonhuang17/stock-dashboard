@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Cell,
   BarChart, Bar, LabelList, ReferenceLine,
@@ -23,23 +23,50 @@ function BubbleChart({ rows }: { rows: PortfolioRow[] }) {
     y: r.today_gain ?? 0,
     z: Math.abs((r.price ?? 0) * r.shares),
   }));
+
+  type DotEntry = typeof data[0];
+
+  const renderDot = (props: Record<string, unknown>) => {
+    const { cx, cy, payload, size } = props as { cx: number; cy: number; payload: DotEntry; size: number };
+    const r = Math.sqrt(size / Math.PI);
+    const fillColor = color(payload.y);
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={r} fill={fillColor} fillOpacity={0.82} />
+        <text x={cx} y={cy - r - 5} textAnchor="middle"
+          fill="#d4eaf5" fontSize={11} fontFamily="Courier New" fontWeight={700}>
+          {payload.ticker}
+        </text>
+      </g>
+    );
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+    <ResponsiveContainer width="100%" height={320}>
+      <ScatterChart margin={{ top: 24, right: 20, bottom: 20, left: 10 }}>
         <XAxis dataKey="x" type="number" name="今日%" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
         <YAxis dataKey="y" type="number" name="今日損益" tick={{ fill: "#6899b8", fontSize: 11 }} />
         <Tooltip
           cursor={{ stroke: "rgba(30,207,214,0.2)" }}
-          contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
-          formatter={(v: unknown, name: unknown) => { const n = v as number; const nm = name as string; return [nm === "x" ? `${n.toFixed(2)}%` : n.toFixed(2), nm === "x" ? "今日%" : "今日損益"] as [string, string]; }}
-          labelFormatter={() => ""}
+          content={({ payload: pl }) => {
+            const d = pl?.[0]?.payload as DotEntry | undefined;
+            if (!d) return null;
+            return (
+              <div style={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", padding: "8px 12px", fontFamily: "Courier New", fontSize: 12 }}>
+                <div style={{ color: "#1ECFD6", fontWeight: 700, marginBottom: 4 }}>{d.ticker}</div>
+                <div>今日%：{d.x >= 0 ? "+" : ""}{d.x.toFixed(2)}%</div>
+                <div style={{ color: d.y >= 0 ? "#c05640" : "#3daa70" }}>
+                  今日損益：{d.y >= 0 ? "+" : ""}{d.y.toFixed(2)}
+                </div>
+              </div>
+            );
+          }}
         />
-        <ZAxis dataKey="z" range={[40, 600]} />
+        <ZAxis dataKey="z" range={[400, 3000]} />
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.3)" />
         <ReferenceLine y={0} stroke="rgba(8,120,164,0.3)" />
-        <Scatter data={data} fill="#1ECFD6">
-          {data.map((d, i) => <Cell key={i} fill={color(d.y)} fillOpacity={0.8} />)}
-        </Scatter>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <Scatter data={data} shape={renderDot as any} />
       </ScatterChart>
     </ResponsiveContainer>
   );
