@@ -151,12 +151,24 @@ function ManageTab({
   const [totalCost, setTotalCost] = useState("");
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
+  const [tickerStatus, setTickerStatus] = useState<"idle" | "checking" | "ok" | "duplicate" | "notfound">("idle");
 
   const [editTicker, setEditTicker] = useState<string | null>(null);
   const [editShares, setEditShares] = useState("");
   const [editTotalCost, setEditTotalCost] = useState("");
 
   const [showSort, setShowSort] = useState(false);
+
+  async function handleTickerBlur() {
+    const t = ticker.trim().toUpperCase();
+    if (!t) { setTickerStatus("idle"); return; }
+    if (positions[t]) { setTickerStatus("duplicate"); return; }
+    setTickerStatus("checking");
+    try {
+      const { exists } = currency === "TWD" ? await api.validateTW(t) : await api.validateUS(t);
+      setTickerStatus(exists ? "ok" : "notfound");
+    } catch { setTickerStatus("idle"); }
+  }
 
   async function handleAdd() {
     const t = ticker.trim().toUpperCase();
@@ -165,13 +177,16 @@ function ManageTab({
     if (missing.length) { setErr(`請填寫：${missing.join("、")}`); return; }
     if (isNaN(sh) || sh <= 0) { setErr("股數必須為正數"); return; }
     if (isNaN(tc) || tc <= 0) { setErr("總成本必須為正數"); return; }
+    if (tickerStatus === "duplicate") { setErr(`${t} 已存在，請使用編輯功能更新`); return; }
+    if (tickerStatus === "notfound") { setErr(`找不到代號 ${t}`); return; }
     setAdding(true); setErr("");
     try {
-      const validate = currency === "TWD" ? api.validateTW(t) : api.validateUS(t);
-      const { exists } = await validate;
-      if (!exists) { setErr(`找不到代號 ${t}`); setAdding(false); return; }
+      if (tickerStatus !== "ok") {
+        const { exists } = currency === "TWD" ? await api.validateTW(t) : await api.validateUS(t);
+        if (!exists) { setErr(`找不到代號 ${t}`); setAdding(false); return; }
+      }
       await api.addPosition(account, t, sh, tc / sh, tc);
-      setTicker(""); setShares(""); setTotalCost("");
+      setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle");
       onRefresh();
     } catch (e: unknown) {
       const msg = (e as Error).message;
@@ -219,8 +234,14 @@ function ManageTab({
           <div>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
             <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
-              value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+              value={ticker}
+              onChange={e => { setTicker(e.target.value.toUpperCase()); setTickerStatus("idle"); setErr(""); }}
+              onBlur={handleTickerBlur}
               onKeyDown={e => e.key === "Enter" && handleAdd()} />
+            {tickerStatus === "checking" && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></div>}
+            {tickerStatus === "ok"       && <div style={{ fontSize: "0.6rem", color: "var(--teal)", marginTop: 2 }}>✓ 代號有效</div>}
+            {tickerStatus === "duplicate" && <div style={{ fontSize: "0.6rem", color: "var(--red)", marginTop: 2 }}>{ticker} 已存在，請用編輯更新</div>}
+            {tickerStatus === "notfound"  && <div style={{ fontSize: "0.6rem", color: "var(--red)", marginTop: 2 }}>找不到代號 {ticker}</div>}
           </div>
           <div>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>股數</div>
