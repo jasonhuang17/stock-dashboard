@@ -461,7 +461,8 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
 
   const loadPortfolio = useCallback(async () => {
     try { setPortfolio(await api.portfolio()); } catch { /* silent */ }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   useEffect(() => { loadPortfolio(); }, [loadPortfolio]);
 
