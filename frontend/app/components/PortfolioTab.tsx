@@ -226,7 +226,7 @@ function ManageTab({
       )}
 
       {/* Add form */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: "0.72rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>
           ◈ 新增持倉
         </div>
