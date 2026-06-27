@@ -313,8 +313,10 @@ def _single_ticker_quote(ticker: str) -> dict:
 
 
 def _fetch_ytd_batch(tickers: list) -> dict:
-    """Batch-fetch YTD start prices via a single yf.download call (avoids per-ticker rate limiting).
-    Returns {ticker: first_close_of_year | None}. Only caches successes (failures retry next load)."""
+    """Batch-fetch YTD start prices via yf.download.
+    Pass 1: Jan 1-20 date range (stocks that existed at year start).
+    Pass 2: period='ytd' for any still missing (covers tickers that IPO'd after Jan 20).
+    Only caches successes — failures retry next portfolio load."""
     if not tickers:
         return {}
     result: dict = {}
@@ -328,27 +330,33 @@ def _fetch_ytd_batch(tickers: list) -> dict:
     if not miss:
         return result
     year = datetime.now().year
-    start, end = f"{year}-01-01", f"{year}-01-20"
-    try:
-        dl_arg = miss[0] if len(miss) == 1 else miss
-        df = yf.download(dl_arg, start=start, end=end, progress=False, auto_adjust=False)
-        if not df.empty:
-            is_multi = hasattr(df.columns, "levels")   # pd.MultiIndex → multi-ticker result
-            for t in miss:
-                try:
-                    series = df["Close"][t].dropna() if is_multi else df["Close"].dropna()
-                    if len(series):
-                        val = float(series.iloc[0])
-                        result[t] = val
-                        with _cache_lock:
-                            _ytd_cache[t] = val
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    for kwargs in (
+        {"start": f"{year}-01-01", "end": f"{year}-01-20"},  # most stocks
+        {"period": "ytd"},                                     # newly listed tickers
+    ):
+        remaining = [t for t in miss if t not in result]
+        if not remaining:
+            break
+        try:
+            dl_arg = remaining[0] if len(remaining) == 1 else remaining
+            df = yf.download(dl_arg, progress=False, auto_adjust=False, **kwargs)
+            if not df.empty:
+                is_multi = hasattr(df.columns, "levels")
+                for t in remaining:
+                    try:
+                        series = df["Close"][t].dropna() if is_multi else df["Close"].dropna()
+                        if len(series):
+                            val = float(series.iloc[0])
+                            result[t] = val
+                            with _cache_lock:
+                                _ytd_cache[t] = val
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     for t in miss:
         if t not in result:
-            result[t] = None   # not cached — will retry on next portfolio load
+            result[t] = None   # not cached — retried on next load
     return result
 
 
