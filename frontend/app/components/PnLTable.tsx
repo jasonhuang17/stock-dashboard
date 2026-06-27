@@ -10,22 +10,36 @@ interface ColDef {
   key: Col;
   label: string;
   fmt: (row: PortfolioRow) => string;
-  optional?: true;
 }
 
-const OPT_STORAGE_KEY = "pnl-opt-cols";
-const OPTIONAL_COLS: { id: "day_high" | "day_low" | "volume"; label: string }[] = [
-  { id: "day_high", label: "最高" },
-  { id: "day_low",  label: "最低" },
-  { id: "volume",   label: "成交量" },
+// Columns that are always shown (never in picker)
+const REQUIRED_COLS = new Set(["ticker", "today_gain", "unreal_gain"]);
+
+const OPT_STORAGE_KEY = "pnl-cols-v2";
+
+type OptColId = "shares" | "avg_cost" | "price" | "per_share" | "pct" | "day_high" | "day_low" | "volume";
+
+const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
+  { id: "shares",    label: "股數",    defaultOn: true  },
+  { id: "avg_cost",  label: "成本",    defaultOn: true  },
+  { id: "price",     label: "現價",    defaultOn: true  },
+  { id: "per_share", label: "單股漲跌", defaultOn: true  },
+  { id: "pct",       label: "漲跌%",   defaultOn: true  },
+  { id: "day_high",  label: "最高",    defaultOn: false },
+  { id: "day_low",   label: "最低",    defaultOn: false },
+  { id: "volume",    label: "成交量",  defaultOn: false },
 ];
 
+function defaultOptCols(): Set<string> {
+  return new Set(OPT_COLS.filter(c => c.defaultOn).map(c => c.id));
+}
+
 function loadOptCols(): Set<string> {
-  if (typeof window === "undefined") return new Set();
+  if (typeof window === "undefined") return defaultOptCols();
   try {
     const stored = localStorage.getItem(OPT_STORAGE_KEY);
-    return stored ? new Set(JSON.parse(stored)) : new Set();
-  } catch { return new Set(); }
+    return stored ? new Set(JSON.parse(stored)) : defaultOptCols();
+  } catch { return defaultOptCols(); }
 }
 
 function saveOptCols(set: Set<string>) {
@@ -37,39 +51,31 @@ function buildCols(currency: Currency, optCols: Set<string>): ColDef[] {
   const priceSym = currency === "TWD" ? "NT$" : "$";
   const perShareDecimals = currency === "TWD" ? 2 : 3;
 
-  const base: ColDef[] = [
-    { key: "ticker",      label: "代號",
+  const ALL: ColDef[] = [
+    { key: "ticker",     label: "代號",
       fmt: r => r.ticker },
-    { key: "shares",      label: "股數",
+    { key: "shares",     label: "股數",
       fmt: r => r.shares.toLocaleString() },
-    { key: "avg_cost",    label: `成本 (${sym})`,
+    { key: "avg_cost",   label: `成本 (${sym})`,
       fmt: r => r.avg_cost.toFixed(3) },
-    { key: "price",       label: "現價",
+    { key: "price",      label: "現價",
       fmt: r => r.price !== null ? `${priceSym}${r.price.toFixed(2)}` : "—" },
-  ];
-
-  const allOptional: ColDef[] = [
-    { key: "day_high" as Col, label: "最高", optional: true,
-      fmt: (r: PortfolioRow) => r.day_high !== null ? `${priceSym}${r.day_high.toFixed(2)}` : "—" },
-    { key: "day_low" as Col,  label: "最低", optional: true,
-      fmt: (r: PortfolioRow) => r.day_low !== null ? `${priceSym}${r.day_low.toFixed(2)}` : "—" },
-    { key: "volume" as Col,   label: "成交量", optional: true,
-      fmt: (r: PortfolioRow) => r.volume !== null ? Math.round(r.volume).toLocaleString() : "—" },
-  ];
-  const optionalMiddle = allOptional.filter(c => optCols.has(c.key));
-
-  const tail: ColDef[] = [
-    { key: "per_share",   label: "單股漲跌",
+    { key: "day_high" as Col, label: "最高",
+      fmt: r => r.day_high !== null ? `${priceSym}${r.day_high.toFixed(2)}` : "—" },
+    { key: "day_low" as Col,  label: "最低",
+      fmt: r => r.day_low !== null ? `${priceSym}${r.day_low.toFixed(2)}` : "—" },
+    { key: "volume" as Col,   label: "成交量",
+      fmt: r => r.volume !== null ? Math.round(r.volume).toLocaleString() : "—" },
+    { key: "per_share",  label: "單股漲跌",
       fmt: r => {
         if (r.per_share === null) return "—";
         const sign = r.per_share >= 0 ? "+" : "";
         return `${sign}${priceSym}${Math.abs(r.per_share).toFixed(perShareDecimals)}`;
       },
     },
-    { key: "pct", label: "漲跌%",
-      fmt: r => r.pct !== null ? fmtPct(r.pct) : "—",
-    },
-    { key: "today_gain",  label: `今日總損益 (${sym})`,
+    { key: "pct",        label: "漲跌%",
+      fmt: r => r.pct !== null ? fmtPct(r.pct) : "—" },
+    { key: "today_gain", label: `今日總損益 (${sym})`,
       fmt: r => r.today_gain !== null ? fmtMoney(r.today_gain, currency) : "—" },
     { key: "unreal_gain", label: "未實現損益",
       fmt: r => {
@@ -80,7 +86,7 @@ function buildCols(currency: Currency, optCols: Set<string>): ColDef[] {
     },
   ];
 
-  return [...base, ...optionalMiddle, ...tail];
+  return ALL.filter(c => REQUIRED_COLS.has(c.key) || optCols.has(c.key));
 }
 
 function colorOf(val: number | null) {
@@ -102,13 +108,12 @@ function sortRows(rows: PortfolioRow[], ss: SortState): PortfolioRow[] {
 
 export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
   const [ss, setSS] = useState<SortState>({ col: null, dir: "desc" });
-  const [optCols, setOptCols] = useState<Set<string>>(new Set());
+  const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setOptCols(loadOptCols()); }, []);
 
-  // Close picker on outside click
   useEffect(() => {
     if (!showPicker) return;
     function handler(e: MouseEvent) {
@@ -147,7 +152,6 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
 
   return (
     <div>
-      {/* Column picker button */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, position: "relative" }} ref={pickerRef}>
         <button
           className="dash-btn dash-btn-sm"
@@ -160,20 +164,25 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
           <div style={{
             position: "absolute", top: "110%", right: 0, zIndex: 100,
             background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)",
-            borderRadius: 6, padding: "10px 14px", minWidth: 140,
+            borderRadius: 6, padding: "10px 14px", minWidth: 130,
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>可選欄位</div>
-            {OPTIONAL_COLS.map(c => (
-              <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
-                <input
-                  type="checkbox"
-                  checked={optCols.has(c.id)}
-                  onChange={() => toggleOptCol(c.id)}
-                  style={{ accentColor: "var(--teal)" }}
-                />
-                {c.label}
-              </label>
+            <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位</div>
+            {OPT_COLS.map((c, i) => (
+              <>
+                {i > 0 && OPT_COLS[i - 1].defaultOn && !c.defaultOn && (
+                  <div key={`sep-${i}`} style={{ borderTop: "1px solid rgba(8,120,164,0.2)", margin: "6px 0" }} />
+                )}
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
+                  <input
+                    type="checkbox"
+                    checked={optCols.has(c.id)}
+                    onChange={() => toggleOptCol(c.id)}
+                    style={{ accentColor: "var(--teal)" }}
+                  />
+                  {c.label}
+                </label>
+              </>
             ))}
           </div>
         )}
