@@ -65,7 +65,11 @@ export default function Dashboard() {
     const next = !useMock;
     setUseMock(next);
     await api.setSettings({ use_mock: next });
+    // Trigger children to re-fetch immediately, then reload group tabs in parallel
     setRefreshKey(k => k + 1);
+    const gr = await api.groups();
+    setGroups(gr.groups);
+    setPinned(gr.pinned);
   }
 
   async function handleCreateGroup() {
