@@ -140,19 +140,18 @@ def _extract_close_series(raw: "pd.DataFrame", ticker: str) -> "Optional[pd.Seri
 
 
 def _single_ticker_quote(ticker: str) -> dict:
-    """Fallback: download one ticker individually."""
+    """Download one ticker via yf.Ticker().history() — independent session, no batch pollution."""
     base = {"ticker": ticker, "price": None, "pct": None,
             "day_high": None, "day_low": None, "volume": None}
     try:
-        raw = yf.download(ticker, period="5d", interval="1d",
-                          auto_adjust=True, progress=False)
+        raw = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=True)
         if not raw.empty:
             closes = raw["Close"].dropna()
             if len(closes) >= 2:
                 prev, curr = float(closes.iloc[-2]), float(closes.iloc[-1])
                 base.update(price=curr, pct=(curr - prev) / prev * 100)
             for field, key in (("High", "day_high"), ("Low", "day_low"), ("Volume", "volume")):
-                if field in raw:
+                if field in raw.columns:
                     s = raw[field].dropna()
                     if len(s) >= 1:
                         base[key] = float(s.iloc[-1])
@@ -170,61 +169,12 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
             _log_quotes("quotes", cached, cached=True)
             return cached
 
-    try:
-        raw = yf.download(
-            list(tickers), period="5d", interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-        )
-    except Exception:
-        return [{"ticker": t, "price": None, "pct": None,
-                 "day_high": None, "day_low": None, "volume": None} for t in tickers]
+    # Fetch each ticker individually (sequential) — yfinance batch downloads are
+    # non-deterministic (same batch returns different pct on different calls), and
+    # yfinance is not thread-safe so parallel individual downloads also corrupt data.
+    out = [_single_ticker_quote(t) for t in tickers]
 
-    out = []
-    missing = []
-    for t in tickers:
-        price = pct = day_high = day_low = volume = None
-        col = _extract_field_series(raw, t, "Close")
-        if col is not None:
-            try:
-                closes = col.dropna()
-                if len(closes) >= 2:
-                    prev, curr = float(closes.iloc[-2]), float(closes.iloc[-1])
-                    pct = (curr - prev) / prev * 100
-                    price = curr
-                h = _extract_field_series(raw, t, "High")
-                if h is not None:
-                    h = h.dropna()
-                    if len(h) >= 1: day_high = float(h.iloc[-1])
-                lo = _extract_field_series(raw, t, "Low")
-                if lo is not None:
-                    lo = lo.dropna()
-                    if len(lo) >= 1: day_low = float(lo.iloc[-1])
-                v = _extract_field_series(raw, t, "Volume")
-                if v is not None:
-                    v = v.dropna()
-                    if len(v) >= 1: volume = float(v.iloc[-1])
-            except Exception:
-                pass
-        if price is None:
-            missing.append(t)
-        out.append({"ticker": t, "price": price, "pct": pct,
-                    "day_high": day_high, "day_low": day_low, "volume": volume})
-
-    # Retry missing tickers individually (handles yfinance batch partial failures)
-    if missing:
-        retry = {r["ticker"]: r for r in (_single_ticker_quote(t) for t in missing)}
-        out = [retry.get(r["ticker"], r) if r["price"] is None else r for r in out]
-
-    # Only cache when data is fresh. yfinance occasionally returns stale rows
-    # (wrong date, near-zero pct) on warmup — skip caching so the next request retries.
-    data_fresh = False
-    try:
-        last_date = pd.Timestamp(raw.index[-1]).date()
-        today_et = datetime.now(pytz.timezone("America/New_York")).date()
-        data_fresh = (today_et - last_date).days <= 5  # allow Mon + long weekends
-    except Exception:
-        data_fresh = True
-    if any(r["price"] is not None for r in out) and data_fresh:
+    if any(r["price"] is not None for r in out):
         with _cache_lock:
             _quotes_cache[tickers] = out
     _log_quotes("quotes", out, cached=False)
