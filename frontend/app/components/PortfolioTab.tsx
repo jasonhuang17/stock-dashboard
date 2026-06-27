@@ -161,8 +161,10 @@ function ManageTab({
   async function handleAdd() {
     const t = ticker.trim().toUpperCase();
     const sh = parseFloat(shares), tc = parseFloat(totalCost);
-    if (!t || !shares || !totalCost) { setErr("請填代號、股數和總成本"); return; }
-    if (isNaN(sh) || isNaN(tc) || sh <= 0 || tc <= 0) { setErr("股數/成本必須為正數"); return; }
+    const missing = [...(!t ? ["代號"] : []), ...(!shares ? ["股數"] : []), ...(!totalCost ? ["總成本"] : [])];
+    if (missing.length) { setErr(`請填寫：${missing.join("、")}`); return; }
+    if (isNaN(sh) || sh <= 0) { setErr("股數必須為正數"); return; }
+    if (isNaN(tc) || tc <= 0) { setErr("總成本必須為正數"); return; }
     setAdding(true); setErr("");
     try {
       const validate = currency === "TWD" ? api.validateTW(t) : api.validateUS(t);
@@ -171,7 +173,10 @@ function ManageTab({
       await api.addPosition(account, t, sh, tc / sh, tc);
       setTicker(""); setShares(""); setTotalCost("");
       onRefresh();
-    } catch (e: unknown) { setErr((e as Error).message); }
+    } catch (e: unknown) {
+      const msg = (e as Error).message;
+      setErr(msg.includes("409") ? `${t} 已存在，請使用編輯功能更新` : msg);
+    }
     setAdding(false);
   }
 
