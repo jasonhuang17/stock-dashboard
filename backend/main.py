@@ -36,8 +36,8 @@ _DEFAULT_GROUPS = {
 }
 
 _EMPTY_PORTFOLIO = {
-    "複委託（台幣戶）": {"currency": "USD", "positions": {}},
-    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+    "美股複委託（台幣帳戶）": {"currency": "USD", "positions": {}},
+    "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
     "台股帳戶":         {"currency": "TWD", "positions": {}},
 }
 
@@ -101,12 +101,12 @@ def load_config() -> tuple[dict, dict]:
         raw_portfolio = data.get("portfolio", {})
         groups = {k: raw.get(k, list(v)) for k, v in _DEFAULT_GROUPS.items()}
         # Migrate old flat portfolio {"TICKER": {"shares":N, "avg_cost":X}}
-        if raw_portfolio and "複委託（台幣戶）" not in raw_portfolio:
+        if raw_portfolio and "美股複委託（台幣帳戶）" not in raw_portfolio:
             first = next(iter(raw_portfolio.values()), {})
             if isinstance(first, dict) and "shares" in first:
                 raw_portfolio = {
-                    "複委託（台幣戶）": {"currency": "USD", "positions": raw_portfolio},
-                    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+                    "美股複委託（台幣帳戶）": {"currency": "USD", "positions": raw_portfolio},
+                    "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
                     "台股帳戶":         {"currency": "TWD", "positions": {}},
                 }
         return groups, raw_portfolio or _EMPTY_PORTFOLIO
@@ -449,9 +449,10 @@ def health():
 
 
 class SettingsBody(BaseModel):
-    use_mock: Optional[bool] = None
-    col_vis:   Optional[list] = None
-    col_order: Optional[list] = None
+    use_mock:  Optional[bool] = None
+    col_vis:   Optional[list] = None   # legacy flat; kept for migration reads
+    col_order: Optional[list] = None   # legacy flat; kept for migration reads
+    pnl_cols:  Optional[dict] = None   # { account_key: { vis: [...], order: [...] } }
 
 
 @app.get("/api/settings")
@@ -468,6 +469,10 @@ def put_settings(body: SettingsBody):
         s["col_vis"] = body.col_vis
     if body.col_order is not None:
         s["col_order"] = body.col_order
+    if body.pnl_cols is not None:
+        existing = s.get("pnl_cols", {})
+        existing.update(body.pnl_cols)
+        s["pnl_cols"] = existing
     save_settings(s)
     return s
 

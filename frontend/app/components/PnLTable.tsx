@@ -19,7 +19,7 @@ interface ColDef {
   fmt: (row: PortfolioRow) => string;
 }
 
-const ALL_ACCOUNTS = ["複委託（台幣戶）", "複委託（美金戶）", "台股帳戶"];
+const ALL_ACCOUNTS = ["美股複委託（台幣帳戶）", "美股複委託（美金帳戶）", "台股帳戶"];
 const SYNC_EVENT = "pnl-cols-sync";
 
 // Only ticker is always shown; everything else is optional

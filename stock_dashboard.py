@@ -25,8 +25,8 @@ _DEFAULT_GROUPS = {
 }
 
 _EMPTY_PORTFOLIO = {
-    "複委託（台幣戶）": {"currency": "USD", "positions": {}},
-    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+    "美股複委託（台幣帳戶）": {"currency": "USD", "positions": {}},
+    "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
     "台股帳戶":         {"currency": "TWD", "positions": {}},
 }
 
@@ -42,12 +42,12 @@ def load_config():
             raw_portfolio = {}
         groups = {k: raw.get(k, list(v)) for k, v in _DEFAULT_GROUPS.items()}
         # Auto-migrate old flat format {"TICKER": {"shares":N,"avg_cost":X}}
-        if raw_portfolio and "複委託（台幣戶）" not in raw_portfolio:
+        if raw_portfolio and "美股複委託（台幣帳戶）" not in raw_portfolio:
             first = next(iter(raw_portfolio.values()), {})
             if isinstance(first, dict) and "shares" in first:
                 raw_portfolio = {
-                    "複委託（台幣戶）": {"currency": "USD", "positions": raw_portfolio},
-                    "複委託（美金戶）": {"currency": "USD", "positions": {}},
+                    "美股複委託（台幣帳戶）": {"currency": "USD", "positions": raw_portfolio},
+                    "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
                     "台股帳戶":         {"currency": "TWD", "positions": {}},
                 }
         return groups, raw_portfolio or _EMPTY_PORTFOLIO
@@ -82,12 +82,12 @@ elif "portfolio" not in st.session_state:
 
 # Migrate in-session portfolio to multi-account format if still in old flat format
 _port = st.session_state.portfolio
-if _port and "複委託（台幣戶）" not in _port:
+if _port and "美股複委託（台幣帳戶）" not in _port:
     _first = next(iter(_port.values()), {})
     if isinstance(_first, dict) and "shares" in _first:
         st.session_state.portfolio = {
-            "複委託（台幣戶）": {"currency": "USD", "positions": dict(_port)},
-            "複委託（美金戶）": {"currency": "USD", "positions": {}},
+            "美股複委託（台幣帳戶）": {"currency": "USD", "positions": dict(_port)},
+            "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
             "台股帳戶":         {"currency": "TWD", "positions": {}},
         }
 
@@ -672,8 +672,8 @@ def bar_chart(results):
 # ── Portfolio helper functions ─────────────────────────────────────────────────
 
 _ACCT_MAP = [
-    ("複委託（台幣戶）", "USD"),
-    ("複委託（美金戶）", "USD"),
+    ("美股複委託（台幣帳戶）", "USD"),
+    ("美股複委託（美金帳戶）", "USD"),
     ("台股帳戶",         "TWD"),
 ]
 
@@ -1522,18 +1522,18 @@ def _dashboard_fragment():
     with tabs[0]:
         acct_tabs = st.tabs([
             "📊 整體損益",
-            "🏦 複委託（台幣戶）",
-            "🏦 複委託（美金戶）",
+            "🇺🇸 美股複委託（台幣帳戶）",
+            "🇺🇸 美股複委託（美金帳戶）",
             "🇹🇼 台股帳戶",
         ])
     
         # ── 整體損益 ─────────────────────────────────────────────────────────────
         with acct_tabs[0]:
             _usd_rows_by_acct = {
-                "複委託（台幣戶）": _portfolio_rows("複委託（台幣戶）"),
-                "複委託（美金戶）": _portfolio_rows("複委託（美金戶）"),
+                "美股複委託（台幣帳戶）": _portfolio_rows("美股複委託（台幣帳戶）"),
+                "美股複委託（美金帳戶）": _portfolio_rows("美股複委託（美金帳戶）"),
             }
-            usd_rows = _usd_rows_by_acct["複委託（台幣戶）"] + _usd_rows_by_acct["複委託（美金戶）"]
+            usd_rows = _usd_rows_by_acct["美股複委託（台幣帳戶）"] + _usd_rows_by_acct["美股複委託（美金帳戶）"]
             twd_rows = _portfolio_rows("台股帳戶")
     
             if not usd_rows and not twd_rows:
@@ -1552,8 +1552,8 @@ def _dashboard_fragment():
                     )
                     _sub_totals = []
                     for _sub_ak, _sub_label in [
-                        ("複委託（台幣戶）", "🏦 複委託（台幣戶）"),
-                        ("複委託（美金戶）", "🏦 複委託（美金戶）"),
+                        ("美股複委託（台幣帳戶）", "🇺🇸 美股複委託（台幣帳戶）"),
+                        ("美股複委託（美金帳戶）", "🇺🇸 美股複委託（美金帳戶）"),
                     ]:
                         _sub_rows = _usd_rows_by_acct[_sub_ak]
                         if not _sub_rows:

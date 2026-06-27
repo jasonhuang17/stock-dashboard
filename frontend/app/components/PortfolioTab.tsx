@@ -369,8 +369,8 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
 
   useEffect(() => {
     Promise.all([
-      api.portfolioRows("複委託（台幣戶）"),
-      api.portfolioRows("複委託（美金戶）"),
+      api.portfolioRows("美股複委託（台幣帳戶）"),
+      api.portfolioRows("美股複委託（美金帳戶）"),
       api.portfolioRows("台股帳戶"),
     ]).then(([tw, us, twd]) => {
       setUsdRowsTW(tw);
@@ -404,13 +404,13 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
           {sectionTitle("美股市場 (USD)")}
           {usdRowsTW.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>複委託（台幣戶）</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>美股複委託（台幣帳戶）</div>
               <PnLTable rows={usdRowsTW} currency="USD" />
             </div>
           )}
           {usdRowsUS.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>複委託（美金戶）</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>美股複委託（美金帳戶）</div>
               <PnLTable rows={usdRowsUS} currency="USD" />
             </div>
           )}
@@ -465,8 +465,8 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
   }, []);
 
   const ACCOUNTS: { key: string; label: string; currency: Currency }[] = [
-    { key: "複委託（台幣戶）", label: "🏦 複委託（台幣戶）", currency: "USD" },
-    { key: "複委託（美金戶）", label: "🏦 複委託（美金戶）", currency: "USD" },
+    { key: "美股複委託（台幣帳戶）", label: "🇺🇸 美股複委託（台幣帳戶）", currency: "USD" },
+    { key: "美股複委託（美金帳戶）", label: "🇺🇸 美股複委託（美金帳戶）", currency: "USD" },
     { key: "台股帳戶",         label: "🇹🇼 台股帳戶",        currency: "TWD" },
   ];
 
