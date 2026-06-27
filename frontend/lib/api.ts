@@ -92,10 +92,10 @@ export const api = {
     get<{ exists: boolean; resolved: string | null }>(`/api/validate/tw/${encodeURIComponent(ticker)}`),
 
   getSettings: () =>
-    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[] }>("/api/settings"),
+    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[] }> }>("/api/settings"),
 
-  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[] }) =>
-    put<{ use_mock: boolean; col_vis?: string[]; col_order?: string[] }>("/api/settings", patch),
+  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[] }> }) =>
+    put<{ use_mock: boolean }>("/api/settings", patch),
 };
 
 // Convenience: format number with sign
