@@ -110,6 +110,44 @@ cd frontend && npm run dev
 
 ---
 
+### 常見問題：Port 已被佔用（Address already in use）
+
+啟動時出現 `[Errno 48] Address already in use` 或 `EADDRINUSE`，代表上次的 process 沒有正常結束。
+
+**macOS / Linux（Terminal）**
+
+```bash
+# 清掉 backend（:8000）和 frontend（:3000）
+lsof -ti :8000 :3000 | xargs kill -9
+
+# 只清 backend
+lsof -ti :8000 | xargs kill -9
+```
+
+**Windows（Command Prompt）**
+
+```cmd
+:: 查詢佔用 8000 的 PID
+netstat -ano | findstr :8000
+
+:: 用上方查到的 PID 強制終止（替換 <PID>）
+taskkill /PID <PID> /F
+```
+
+**Windows（PowerShell）**
+
+```powershell
+# 一行清掉 :8000
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess -Force
+
+# 一行清掉 :3000
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
+```
+
+清完後重新執行 `./start-js.sh`（macOS）或 `start-js.sh`（Windows Git Bash）。
+
+---
+
 ## 建議：使用虛擬環境（Streamlit 版本，選用）
 
 **macOS**
