@@ -1,0 +1,79 @@
+{
+  "group_tickers": {
+    "🚀 個股": ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "NFLX", "AMD", "AVGO", "TSM", "QCOM", "MU", "INTC", "CRM", "ADBE", "ORCL", "SHOP", "UBER", "ABNB"],
+    "⚡ 槓桿型": ["TQQQ", "SQQQ", "UPRO", "SPXU", "SOXL", "SOXS", "TECL", "LABU", "FNGU", "CURE"],
+    "🌐 大盤型": ["VOO", "SPY", "QQQ", "IWM", "DIA", "VTI", "GLD", "TLT", "BND", "AGG"]
+  },
+  "portfolio": {
+    "複委託（台幣戶）": {
+      "currency": "USD",
+      "positions": {
+        "AAPL":  { "shares": 80,  "avg_cost": 172.45, "total_cost": 13796.00 },
+        "MSFT":  { "shares": 30,  "avg_cost": 388.20, "total_cost": 11646.00 },
+        "NVDA":  { "shares": 25,  "avg_cost": 478.60, "total_cost": 11965.00 },
+        "TSLA":  { "shares": 50,  "avg_cost": 215.30, "total_cost": 10765.00 },
+        "AMZN":  { "shares": 60,  "avg_cost": 183.40, "total_cost": 11004.00 },
+        "GOOGL": { "shares": 70,  "avg_cost": 161.80, "total_cost": 11326.00 },
+        "META":  { "shares": 20,  "avg_cost": 468.50, "total_cost":  9370.00 },
+        "AMD":   { "shares": 40,  "avg_cost": 163.20, "total_cost":  6528.00 },
+        "AVGO":  { "shares": 10,  "avg_cost": 1312.00,"total_cost": 13120.00 },
+        "TSM":   { "shares": 60,  "avg_cost": 140.50, "total_cost":  8430.00 },
+        "NFLX":  { "shares": 15,  "avg_cost": 598.30, "total_cost":  8974.50 },
+        "QCOM":  { "shares": 45,  "avg_cost": 168.40, "total_cost":  7578.00 },
+        "MU":    { "shares": 55,  "avg_cost": 112.60, "total_cost":  6193.00 },
+        "CRM":   { "shares": 25,  "avg_cost": 268.90, "total_cost":  6722.50 },
+        "ADBE":  { "shares": 12,  "avg_cost": 492.00, "total_cost":  5904.00 },
+        "ORCL":  { "shares": 35,  "avg_cost": 118.30, "total_cost":  4140.50 },
+        "SHOP":  { "shares": 30,  "avg_cost": 72.40,  "total_cost":  2172.00 },
+        "UBER":  { "shares": 80,  "avg_cost": 68.20,  "total_cost":  5456.00 },
+        "ABNB":  { "shares": 20,  "avg_cost": 142.60, "total_cost":  2852.00 }
+      }
+    },
+    "複委託（美金戶）": {
+      "currency": "USD",
+      "positions": {
+        "JPM":   { "shares": 40,  "avg_cost": 188.30, "total_cost":  7532.00 },
+        "BAC":   { "shares": 120, "avg_cost": 36.80,  "total_cost":  4416.00 },
+        "GS":    { "shares": 15,  "avg_cost": 442.60, "total_cost":  6639.00 },
+        "V":     { "shares": 30,  "avg_cost": 262.40, "total_cost":  7872.00 },
+        "MA":    { "shares": 20,  "avg_cost": 446.80, "total_cost":  8936.00 },
+        "JNJ":   { "shares": 35,  "avg_cost": 152.30, "total_cost":  5330.50 },
+        "LLY":   { "shares": 10,  "avg_cost": 742.50, "total_cost":  7425.00 },
+        "UNH":   { "shares": 12,  "avg_cost": 488.20, "total_cost":  5858.40 },
+        "XOM":   { "shares": 50,  "avg_cost": 108.40, "total_cost":  5420.00 },
+        "CVX":   { "shares": 40,  "avg_cost": 152.60, "total_cost":  6104.00 },
+        "WMT":   { "shares": 60,  "avg_cost": 58.30,  "total_cost":  3498.00 },
+        "VOO":   { "shares": 25,  "avg_cost": 448.20, "total_cost": 11205.00 },
+        "QQQ":   { "shares": 20,  "avg_cost": 432.60, "total_cost":  8652.00 },
+        "SPY":   { "shares": 15,  "avg_cost": 492.30, "total_cost":  7384.50 },
+        "GLD":   { "shares": 30,  "avg_cost": 198.40, "total_cost":  5952.00 },
+        "TLT":   { "shares": 50,  "avg_cost": 88.60,  "total_cost":  4430.00 }
+      }
+    },
+    "台股帳戶": {
+      "currency": "TWD",
+      "positions": {
+        "2330":  { "shares": 2000,  "avg_cost": 848.00,  "total_cost": 1696000.0 },
+        "2317":  { "shares": 5000,  "avg_cost": 104.20,  "total_cost":  521000.0 },
+        "2454":  { "shares": 3000,  "avg_cost": 1248.00, "total_cost": 3744000.0 },
+        "2382":  { "shares": 4000,  "avg_cost": 218.50,  "total_cost":  874000.0 },
+        "2308":  { "shares": 6000,  "avg_cost": 334.00,  "total_cost": 2004000.0 },
+        "2303":  { "shares": 8000,  "avg_cost": 48.20,   "total_cost":  385600.0 },
+        "2412":  { "shares": 5000,  "avg_cost": 128.00,  "total_cost":  640000.0 },
+        "2886":  { "shares": 10000, "avg_cost": 42.80,   "total_cost":  428000.0 },
+        "2881":  { "shares": 8000,  "avg_cost": 88.30,   "total_cost":  706400.0 },
+        "2882":  { "shares": 6000,  "avg_cost": 72.60,   "total_cost":  435600.0 },
+        "0050":  { "shares": 3000,  "avg_cost": 168.40,  "total_cost":  505200.0 },
+        "00878": { "shares": 15000, "avg_cost": 21.60,   "total_cost":  324000.0 },
+        "00881": { "shares": 10000, "avg_cost": 18.20,   "total_cost":  182000.0 },
+        "2609":  { "shares": 10000, "avg_cost": 32.40,   "total_cost":  324000.0 },
+        "2615":  { "shares": 8000,  "avg_cost": 68.80,   "total_cost":  550400.0 },
+        "3008":  { "shares": 2000,  "avg_cost": 328.00,  "total_cost":  656000.0 },
+        "2395":  { "shares": 3000,  "avg_cost": 492.00,  "total_cost": 1476000.0 },
+        "6505":  { "shares": 4000,  "avg_cost": 88.40,   "total_cost":  353600.0 },
+        "2891":  { "shares": 10000, "avg_cost": 32.60,   "total_cost":  326000.0 },
+        "1301":  { "shares": 5000,  "avg_cost": 96.20,   "total_cost":  481000.0 }
+      }
+    }
+  }
+}

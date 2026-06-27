@@ -20,11 +20,12 @@ streamlit run stock_dashboard.py
 ## 專案結構
 
 ```
-stock_dashboard.py   # 唯一的程式檔，所有邏輯都在這裡
-config.json          # 使用者資料（gitignored）：group_tickers + portfolio
-DEV_LOG.md           # 開發紀錄（gitignored）
-README.md            # 使用說明（已 commit）
-CLAUDE.md            # 本檔案（已 commit）
+stock_dashboard.py        # Streamlit 版本（單一 Python 檔）
+user_data.json            # 使用者資料（gitignored）：group_tickers + portfolio
+backend/demo_data.json    # Demo 模式資料（已 commit）：55 支股票的範例持倉
+DEV_LOG.md                # 開發紀錄（gitignored）
+README.md                 # 使用說明（已 commit）
+CLAUDE.md                 # 本檔案（已 commit）
 ```
 
 ---
@@ -35,7 +36,7 @@ CLAUDE.md            # 本檔案（已 commit）
 - **資料來源**：`yfinance`，30 秒 cache（`@st.cache_data(ttl=28)`）
 - **UI 框架**：Streamlit，深色科幻主題，Courier New 字型
 - **主色**：teal `#1ECFD6`、gold `#EDD170`、背景 `#001d3a`
-- **持久化**：`config.json`，結構如下：
+- **持久化**：`user_data.json`，結構如下：
   ```json
   {
     "group_tickers": { "🚀 個股": [...], "⚡ 槓桿型": [...], "🌐 大盤型": [...] },
