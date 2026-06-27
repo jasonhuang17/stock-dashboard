@@ -235,7 +235,7 @@ function ManageTab({
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
             <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
               value={ticker}
-              onChange={e => { setTicker(e.target.value.toUpperCase()); setTickerStatus("idle"); setErr(""); }}
+              onChange={e => { setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, "")); setTickerStatus("idle"); setErr(""); }}
               onBlur={handleTickerBlur}
               onKeyDown={e => e.key === "Enter" && handleAdd()} />
             <div style={{ position: "absolute", top: "100%", left: 0, paddingTop: 2, whiteSpace: "nowrap" }}>
