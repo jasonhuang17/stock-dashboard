@@ -63,9 +63,11 @@ function buildCols(currency: Currency, optCols: Set<string>): ColDef[] {
       fmt: r => {
         if (r.per_share === null) return "—";
         const sign = r.per_share >= 0 ? "+" : "";
-        const pctPart = r.pct !== null ? ` (${fmtPct(r.pct)})` : "";
-        return `${sign}${priceSym}${Math.abs(r.per_share).toFixed(perShareDecimals)}${pctPart}`;
+        return `${sign}${priceSym}${Math.abs(r.per_share).toFixed(perShareDecimals)}`;
       },
+    },
+    { key: "pct", label: "漲跌%",
+      fmt: r => r.pct !== null ? fmtPct(r.pct) : "—",
     },
     { key: "today_gain",  label: `今日總損益 (${sym})`,
       fmt: r => r.today_gain !== null ? fmtMoney(r.today_gain, currency) : "—" },
@@ -198,7 +200,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
               <tr key={row.ticker}>
                 {cols.map(c => {
                   const val = row[c.key] as number | null;
-                  const needsColor = ["per_share", "today_gain", "unreal_gain"].includes(c.key);
+                  const needsColor = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
                   return (
                     <td key={c.key} className={needsColor ? colorOf(val) : ""}>
                       {c.key === "ticker" && row.name ? (
