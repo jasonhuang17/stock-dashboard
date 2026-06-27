@@ -449,7 +449,9 @@ def health():
 
 
 class SettingsBody(BaseModel):
-    use_mock: bool
+    use_mock: Optional[bool] = None
+    col_vis:   Optional[list] = None
+    col_order: Optional[list] = None
 
 
 @app.get("/api/settings")
@@ -460,7 +462,12 @@ def get_settings():
 @app.put("/api/settings")
 def put_settings(body: SettingsBody):
     s = load_settings()
-    s["use_mock"] = body.use_mock
+    if body.use_mock is not None:
+        s["use_mock"] = body.use_mock
+    if body.col_vis is not None:
+        s["col_vis"] = body.col_vis
+    if body.col_order is not None:
+        s["col_order"] = body.col_order
     save_settings(s)
     return s
 

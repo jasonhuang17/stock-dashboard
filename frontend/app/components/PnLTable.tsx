@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import type { PortfolioRow, SortState } from "@/lib/types";
-import { fmtMoney, fmtPct } from "@/lib/api";
+import { api, fmtMoney, fmtPct } from "@/lib/api";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -20,8 +20,6 @@ interface ColDef {
 }
 
 // Only ticker is always shown; everything else is optional
-const VIS_KEY   = "pnl-cols-v4";
-const ORDER_KEY = "pnl-cols-order-v3";
 
 type OptColId =
   | "shares" | "avg_cost" | "cost_basis" | "price"
@@ -49,31 +47,10 @@ function defaultOptCols(): Set<string> {
   return new Set(OPT_COLS.filter(c => c.defaultOn).map(c => c.id));
 }
 
-function loadOptCols(): Set<string> {
-  if (typeof window === "undefined") return defaultOptCols();
-  try {
-    const stored = localStorage.getItem(VIS_KEY);
-    return stored ? new Set(JSON.parse(stored)) : defaultOptCols();
-  } catch { return defaultOptCols(); }
-}
-
-function saveOptCols(set: Set<string>) {
-  try { localStorage.setItem(VIS_KEY, JSON.stringify([...set])); } catch { /* silent */ }
-}
-
-function loadColOrder(): OptColId[] {
-  if (typeof window === "undefined") return [...DEFAULT_ORDER] as OptColId[];
-  try {
-    const stored = localStorage.getItem(ORDER_KEY);
-    if (!stored) return [...DEFAULT_ORDER] as OptColId[];
-    const parsed = JSON.parse(stored) as OptColId[];
-    const missing = DEFAULT_ORDER.filter(id => !parsed.includes(id as OptColId)) as OptColId[];
-    return [...parsed, ...missing];
-  } catch { return [...DEFAULT_ORDER] as OptColId[]; }
-}
-
-function saveColOrder(order: OptColId[]) {
-  try { localStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch { /* silent */ }
+function mergeOrder(stored: string[]): OptColId[] {
+  const valid = stored.filter(id => DEFAULT_ORDER.includes(id as OptColId)) as OptColId[];
+  const missing = DEFAULT_ORDER.filter(id => !valid.includes(id as OptColId)) as OptColId[];
+  return [...valid, ...missing];
 }
 
 function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[]): ColDef[] {
@@ -154,8 +131,10 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setOptCols(loadOptCols());
-    setColOrder(loadColOrder());
+    api.getSettings().then(s => {
+      if (s.col_vis)   setOptCols(new Set(s.col_vis));
+      if (s.col_order) setColOrder(mergeOrder(s.col_order));
+    }).catch(() => { /* keep defaults */ });
   }, []);
 
   useEffect(() => {
@@ -173,7 +152,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     setOptCols(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      saveOptCols(next);
+      api.setSettings({ col_vis: [...next] }).catch(() => {});
       return next;
     });
   }
@@ -183,7 +162,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     if (!over || active.id === over.id) return;
     setColOrder(prev => {
       const next = arrayMove(prev, prev.indexOf(active.id as OptColId), prev.indexOf(over.id as OptColId));
-      saveColOrder(next);
+      api.setSettings({ col_order: next }).catch(() => {});
       return next;
     });
   }

@@ -59,7 +59,7 @@ export default function Dashboard() {
   async function handleToggleMock() {
     const next = !useMock;
     setUseMock(next);
-    await api.setSettings(next);
+    await api.setSettings({ use_mock: next });
     setRefreshKey(k => k + 1);
   }
 
