@@ -1,4 +1,9 @@
 {
+  "group_markets": {
+    "⚡ 個股": "US",
+    "🚀 槓桿型": "US",
+    "🌐 大盤型": "US"
+  },
   "group_tickers": {
     "⚡ 個股": ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "NFLX", "AMD", "AVGO", "TSM", "QCOM", "MU", "INTC", "CRM", "ADBE", "ORCL", "SHOP", "UBER", "ABNB"],
     "🚀 槓桿型": ["TQQQ", "SQQQ", "UPRO", "SPXU", "SOXL", "SOXS", "TECL", "LABU", "FNGU", "CURE"],

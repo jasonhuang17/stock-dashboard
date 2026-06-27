@@ -1,4 +1,4 @@
-import type { Quote, PremarketQuote, PortfolioRow, PremarketPortfolioRow, Position, Portfolio, Groups, MarketStatus } from "./types";
+import type { Quote, PremarketQuote, PortfolioRow, PremarketPortfolioRow, Position, Portfolio, Groups, MarketStatus, Market } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -46,28 +46,28 @@ async function del<T>(path: string): Promise<T> {
 
 export const api = {
   marketStatus: () =>
-    get<{ status: MarketStatus; time: string }>("/api/market-status"),
+    get<{ status: MarketStatus; time: string; us: { status: MarketStatus; time: string }; tw: { status: MarketStatus; time: string } }>("/api/market-status"),
 
-  quotes: (tickers: string[]) =>
-    get<Quote[]>(`/api/quotes?tickers=${tickers.join(",")}`),
+  quotes: (tickers: string[], market: Market = "US") =>
+    get<Quote[]>(`/api/quotes?tickers=${tickers.join(",")}&market=${market}`),
 
   premarket: (tickers: string[]) =>
     get<PremarketQuote[]>(`/api/premarket?tickers=${tickers.join(",")}`),
 
   groups: () =>
-    get<{ groups: Groups; pinned: string[] }>("/api/groups"),
+    get<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>("/api/groups"),
 
-  createGroup: (name: string) =>
-    post<{ groups: Groups; pinned: string[] }>("/api/groups", { name }),
+  createGroup: (name: string, market: Market = "US") =>
+    post<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>("/api/groups", { name, market }),
 
   deleteGroup: (name: string) =>
-    del<{ groups: Groups; pinned: string[] }>(`/api/groups/${encodeURIComponent(name)}`),
+    del<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>(`/api/groups/${encodeURIComponent(name)}`),
 
   renameGroup: (name: string, newName: string) =>
-    patch<{ groups: Groups; pinned: string[] }>(`/api/groups/${encodeURIComponent(name)}`, { name: newName }),
+    patch<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>(`/api/groups/${encodeURIComponent(name)}`, { name: newName }),
 
   reorderGroups: (order: string[]) =>
-    put<{ groups: Groups; pinned: string[] }>("/api/groups/order", { order }),
+    put<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>("/api/groups/order", { order }),
 
   addGroupTicker: (group: string, ticker: string) =>
     post<{ tickers: string[] }>(`/api/groups/${encodeURIComponent(group)}/tickers`, { ticker }),

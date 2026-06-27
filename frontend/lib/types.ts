@@ -53,6 +53,7 @@ export type Portfolio = Record<string, Account>;
 export type Groups = Record<string, string[]>;
 
 export type MarketStatus = "OPEN" | "PRE/POST" | "CLOSED";
+export type Market = "US" | "TW";
 
 export type SortDir = "asc" | "desc";
 export interface SortState {

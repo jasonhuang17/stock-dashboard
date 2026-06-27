@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
-import type { Quote, PremarketQuote } from "@/lib/types";
+import type { Quote, PremarketQuote, Market } from "@/lib/types";
 import { StockCard, PremarketCard } from "./StockCard";
 import { GroupStats, GroupCharts } from "./GroupCharts";
 import { SortableChips } from "./SortableChips";
@@ -11,12 +11,13 @@ type SubTab = "cards" | "pie" | "bar" | "premarket";
 interface Props {
   groupName: string;
   tickers: string[];
+  market: Market;
   refreshKey: number;
   useMock: boolean;
   onTickersChange: (tickers: string[]) => void;
 }
 
-export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersChange }: Props) {
+export function GroupTab({ groupName, tickers, market, refreshKey, useMock, onTickersChange }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("cards");
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersCha
     if (!tickers.length) { setQuotes([]); setPremarket([]); setLoading(false); return; }
     try {
       const [q, pm] = await Promise.all([
-        api.quotes(tickers),
+        api.quotes(tickers, market),
         api.premarket(tickers),
       ]);
       setQuotes(q);
@@ -50,7 +51,7 @@ export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersCha
     } catch { /* silent */ }
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tickersSig, refreshKey]);
+  }, [tickersSig, refreshKey, market]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -70,8 +71,13 @@ export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersCha
     setAdding(true);
     setAddError("");
     try {
-      const { exists } = await api.validateUS(t);
-      if (!exists) { setAddError(`找不到代號 ${t}`); setAdding(false); return; }
+      if (market === "TW") {
+        const { exists } = await api.validateTW(t);
+        if (!exists) { setAddError(`找不到台股代號 ${t}`); setAdding(false); return; }
+      } else {
+        const { exists } = await api.validateUS(t);
+        if (!exists) { setAddError(`找不到代號 ${t}`); setAdding(false); return; }
+      }
       const res = await api.addGroupTicker(groupName, t);
       onTickersChange(res.tickers);
       setAddInput("");
@@ -189,7 +195,7 @@ export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersCha
           <input
             className="dash-input"
             style={{ width: 120 }}
-            placeholder="代號 (e.g. NVDA)"
+            placeholder={market === "TW" ? "代號 (e.g. 2330)" : "代號 (e.g. NVDA)"}
             value={addInput}
             onChange={e => setAddInput(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === "Enter" && handleAdd()}
