@@ -161,6 +161,19 @@ def active_portfolio() -> dict:
     return portfolio
 
 
+def active_groups() -> dict:
+    """Return demo or real group tickers depending on settings."""
+    if load_settings().get("use_mock"):
+        try:
+            with open(DEMO_FILE, "r") as f:
+                data = json.load(f)
+            return data.get("group_tickers", {k: list(v) for k, v in _DEFAULT_GROUPS.items()})
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}
+    groups, _ = load_config()
+    return groups
+
+
 # ── Caches ────────────────────────────────────────────────────────────────────
 _quotes_cache: TTLCache = TTLCache(maxsize=200, ttl=28)
 _premarket_cache: TTLCache = TTLCache(maxsize=200, ttl=60)
@@ -501,8 +514,7 @@ def premarket(tickers: str):
 # ── Routes: groups ─────────────────────────────────────────────────────────────
 @app.get("/api/groups")
 def get_groups():
-    groups, _ = load_config()
-    return groups
+    return active_groups()
 
 
 class TickerBody(BaseModel):
