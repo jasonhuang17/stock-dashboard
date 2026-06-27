@@ -312,30 +312,43 @@ def _single_ticker_quote(ticker: str) -> dict:
     return base
 
 
-def _fetch_ytd_start(ticker: str) -> "float | None":
-    """First trading-day Close of the current calendar year. Cached 24h (only on success)."""
+def _fetch_ytd_batch(tickers: list) -> dict:
+    """Batch-fetch YTD start prices via a single yf.download call (avoids per-ticker rate limiting).
+    Returns {ticker: first_close_of_year | None}. Only caches successes (failures retry next load)."""
+    if not tickers:
+        return {}
+    result: dict = {}
+    miss: list = []
     with _cache_lock:
-        if ticker in _ytd_cache:
-            return _ytd_cache[ticker]
-    result = None
+        for t in tickers:
+            if t in _ytd_cache:
+                result[t] = _ytd_cache[t]
+            else:
+                miss.append(t)
+    if not miss:
+        return result
+    year = datetime.now().year
+    start, end = f"{year}-01-01", f"{year}-01-20"
     try:
-        year = datetime.now().year
-        start, end = f"{year}-01-01", f"{year}-01-20"
-        t = yf.Ticker(ticker)
-        df = t.history(start=start, end=end, auto_adjust=False)
-        if df.empty:
-            # Some TW ETFs don't respond to Ticker.history() — use yf.download fallback
-            df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
-        if not df.empty and "Close" in df.columns:
-            closes = df["Close"].dropna()
-            if len(closes):
-                result = float(closes.iloc[0])
+        dl_arg = miss[0] if len(miss) == 1 else miss
+        df = yf.download(dl_arg, start=start, end=end, progress=False, auto_adjust=False)
+        if not df.empty:
+            is_multi = hasattr(df.columns, "levels")   # pd.MultiIndex → multi-ticker result
+            for t in miss:
+                try:
+                    series = df["Close"][t].dropna() if is_multi else df["Close"].dropna()
+                    if len(series):
+                        val = float(series.iloc[0])
+                        result[t] = val
+                        with _cache_lock:
+                            _ytd_cache[t] = val
+                except Exception:
+                    pass
     except Exception:
         pass
-    # Only cache successes — None results are retried on next request
-    if result is not None:
-        with _cache_lock:
-            _ytd_cache[ticker] = result
+    for t in miss:
+        if t not in result:
+            result[t] = None   # not cached — will retry on next portfolio load
     return result
 
 
@@ -524,16 +537,13 @@ def _portfolio_rows(account: str) -> list[dict]:
         quotes = _fetch_quotes(tuple(positions.keys()))
         quote_map = {q["ticker"]: q for q in quotes}
 
-    # Fetch YTD start prices concurrently (24h cache, separate from quotes cache)
+    # Fetch YTD start prices: one batch yf.download call instead of N concurrent requests
+    ytd_full_tickers = list(bare_to_full.values()) if is_twd else list(positions.keys())
+    ytd_full_map = _fetch_ytd_batch(ytd_full_tickers)
     if is_twd:
-        ytd_lookup = {b: bare_to_full[b] for b in positions}   # bare -> full
+        ytd_map: dict = {full_to_bare.get(full, full): val for full, val in ytd_full_map.items()}
     else:
-        ytd_lookup = {t: t for t in positions}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ytd_lookup) or 1)) as ex:
-        ytd_futures = {ex.submit(_fetch_ytd_start, full): bare for bare, full in ytd_lookup.items()}
-        ytd_map: dict = {}
-        for f in concurrent.futures.as_completed(ytd_futures):
-            ytd_map[ytd_futures[f]] = f.result()
+        ytd_map = ytd_full_map
 
     rows = []
     for ticker, pos in positions.items():

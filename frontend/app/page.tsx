@@ -29,7 +29,8 @@ export default function Dashboard() {
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [refreshKey, setRefreshKey] = useState(0);
   const [scrolled, setScrolled] = useState(false);
-  const [useMock, setUseMock]   = useState(false);
+  const [useMock, setUseMock]       = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const cdRef         = useRef(REFRESH_INTERVAL);
   const tickRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const renameEscRef  = useRef(false);  // true when Escape was pressed, suppresses onBlur rename
@@ -43,6 +44,7 @@ export default function Dashboard() {
       setStatus(s);
       setUseMock(settings.use_mock);
     } catch { /* silent */ }
+    setSettingsLoaded(true);
   }, []);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
@@ -314,9 +316,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Tab content */}
-      {tab === 0 && <PortfolioTab refreshKey={refreshKey} useMock={useMock} />}
-      {groupNames.map((g, i) => (
+      {/* Tab content — gated on settingsLoaded to prevent useMock=false flash on page refresh */}
+      {settingsLoaded && tab === 0 && <PortfolioTab refreshKey={refreshKey} useMock={useMock} />}
+      {settingsLoaded && groupNames.map((g, i) => (
         tab === i + 1 && (
           <GroupTab
             key={g}
