@@ -14,6 +14,7 @@ import pytz
 import json
 import os
 from streamlit_sortables import sort_items
+import streamlit_sortables as _st_sortables
 
 # ── Config persistence ────────────────────────────────────────────────────────
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -69,17 +70,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-try:
-    from streamlit_autorefresh import st_autorefresh
-    _custom_sort_active = any(
-        v == "自訂順序"
-        for k, v in st.session_state.items()
-        if k.startswith("sort_")
-    )
-    if not _custom_sort_active:
-        st_autorefresh(interval=30_000, key="refresh")
-except ImportError:
-    pass
 
 # Persist editable ticker lists across reruns (loads from config.json if exists)
 if "group_tickers" not in st.session_state:
@@ -139,6 +129,17 @@ st.markdown("""
 [data-testid="stHeader"]      { display: none !important; }
 [data-testid="stToolbar"]     { display: none !important; }
 [data-testid="stDecoration"]  { display: none !important; }
+
+/* Hide autorefresh iframe and its Streamlit wrapper */
+iframe[height="0"] { display: none !important; }
+[data-testid="stCustomComponentV1"]:has(iframe[height="0"]),
+.element-container:has(iframe[height="0"]) {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 
 /* Page background */
 body, .stApp { background-color: #001d3a !important; }
@@ -306,6 +307,13 @@ hr { border-color: rgba(8,120,164,0.25) !important; }
     border-color: #C05640 !important;
     color: #C05640 !important;
 }
+
+/* ─ Radio label + options ─ */
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] label span,
+[data-testid="stRadio"] p {
+    color: #d4eaf5 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -332,7 +340,7 @@ def market_status():
     return "CLOSED", "s-closed", now
 
 
-@st.cache_data(ttl=28)
+@st.cache_data(ttl=28, show_spinner=False)
 def fetch_quotes(tickers: tuple):
     if not tickers:
         return []
@@ -360,7 +368,7 @@ def fetch_quotes(tickers: tuple):
     return out
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_premarket(tickers: tuple):
     if not tickers:
         return []
@@ -402,7 +410,7 @@ def fetch_premarket(tickers: tuple):
     return out
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _ticker_exists(ticker: str) -> bool:
     try:
         df = yf.download(ticker, period="5d", interval="1d", progress=False)
@@ -411,7 +419,7 @@ def _ticker_exists(ticker: str) -> bool:
         return False
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _resolve_tw_ticker(bare: str) -> str:
     """Resolve a bare TW ticker to its full yfinance symbol (tries .TW then .TWO)."""
     for suffix in (".TW", ".TWO"):
@@ -424,7 +432,7 @@ def _resolve_tw_ticker(bare: str) -> str:
     return bare + ".TW"
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _ticker_exists_tw(bare: str) -> bool:
     """Check if a bare TW ticker exists on Yahoo Finance (.TW or .TWO)."""
     for suffix in (".TW", ".TWO"):
@@ -713,30 +721,134 @@ def _portfolio_rows(acct_key):
     return rows
 
 
-def _render_pnl_table(rows, currency):
+
+@st.fragment
+def _manage_reorder_fragment(acct_key, currency):
+    positions = st.session_state.portfolio.get(acct_key, {}).get("positions", {})
+    _sort_key = f"show_sort_port_{acct_key}"
+    _show_sort = st.session_state.get(_sort_key, False)
+    if st.button("↕ 收起排序 ▲" if _show_sort else "↕ 調整持倉順序 ▼",
+                 key=f"sort_toggle_{acct_key}"):
+        st.session_state[_sort_key] = not _show_sort
+
+    if st.session_state.get(_sort_key, False) and positions:
+        _drag_key    = f"port_drag_{acct_key}"
+        _ticker_list = list(positions.keys())
+
+        # sort_items stores state as [{'header': None, 'items': [...]}] (list of dicts).
+        # Extract inner list with .get() before set-comparing — avoids TypeError on sort().
+        _stored = st.session_state.get(_drag_key)
+        if isinstance(_stored, list) and _stored and isinstance(_stored[0], dict):
+            if set(_stored[0].get("items", [])) != set(_ticker_list):
+                del st.session_state[_drag_key]
+
+        _style = """
+        body, html { background: #001d3a !important; margin: 0; padding: 0; }
+        .sortable-component {
+            background: transparent;
+            border: none;
+            padding: 4px 0;
+            min-height: 44px;
+        }
+        .sortable-item {
+            background-color: rgba(0,45,90,0.9) !important;
+            border: 1px solid rgba(8,120,164,0.4) !important;
+            color: #7ecde4 !important;
+            font-family: 'Courier New', monospace !important;
+            font-weight: 700 !important;
+            font-size: 0.8rem !important;
+            letter-spacing: 0.08em !important;
+            border-radius: 5px !important;
+        }
+        .sortable-item:hover {
+            background-color: rgba(8,120,164,0.25) !important;
+            border-color: rgba(30,207,214,0.45) !important;
+            color: #1ECFD6 !important;
+        }
+        """
+        # Call _component_func directly with explicit height so the iframe renders
+        # at the correct size inside @st.fragment (without height it defaults to 0px).
+        _default = [{"header": None, "items": _ticker_list}]
+        _raw = _st_sortables._component_func(
+            items=_default,
+            direction="horizontal",
+            customStyle=_style,
+            default=_default,
+            key=_drag_key,
+            height=80,
+        )
+        _new_order = _raw[0]["items"] if isinstance(_raw, list) and _raw else _ticker_list
+
+        if set(_new_order) == set(_ticker_list) and _new_order != _ticker_list:
+            reordered = {t: positions[t] for t in _new_order if t in positions}
+            st.session_state.portfolio[acct_key]["positions"] = reordered
+            save_config(st.session_state.group_tickers, st.session_state.portfolio)
+            st.rerun(scope="fragment")
+
+
+@st.fragment
+def _pnl_sort_fragment(rows, currency, sort_key):
     cost_lbl = "成本 (NT$)" if currency == "TWD" else "成本 (USD)"
     gain_sfx = " (TWD)"    if currency == "TWD" else " (USD)"
 
-    st.markdown(f"""
-    <div style='display:grid;
-        grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
-        font-family:Courier New;font-size:0.68rem;color:#4a6a8a;
-        padding:4px 8px 6px;border-bottom:1px solid rgba(8,120,164,0.25);
-        margin-bottom:6px;'>
-      <span>代號</span><span>股數</span><span>{cost_lbl}</span>
-      <span>現價</span><span>單股漲跌</span>
-      <span>今日損益{gain_sfx}</span><span>未實現損益</span>
-    </div>""", unsafe_allow_html=True)
+    _ss_key = f"pnl_sort_{sort_key}"
+    if _ss_key not in st.session_state:
+        st.session_state[_ss_key] = {"col": None, "dir": "desc"}
+    ss = st.session_state[_ss_key]
 
-    total_today = total_prev_mv = total_unreal = 0.0
-    has_data = False
+    COLS = [
+        ("代號",                  "ticker",      1.2),
+        ("股數",                  "shares",      0.8),
+        (cost_lbl,                "avg_cost",    1.1),
+        ("現價",                  "price",       1.1),
+        ("單股漲跌",              "per_share",   1.5),
+        (f"今日損益{gain_sfx}",   "today_gain",  1.3),
+        ("未實現損益",            "unreal_gain", 1.6),
+    ]
+    widths = [c[2] for c in COLS]
 
-    for r in rows:
+    # ── Header row ────────────────────────────────────────────────────────────
+    hcols = st.columns(widths)
+    for col_widget, (label, col_key, _) in zip(hcols, COLS):
+        with col_widget:
+            is_active = ss["col"] == col_key
+            indicator = (" ↑" if ss["dir"] == "asc" else " ↓") if is_active else ""
+            if st.button(
+                f"{label}{indicator}",
+                key=f"sorthdr_{sort_key}_{col_key}",
+                use_container_width=True,
+            ):
+                if is_active:
+                    initial_dir = "asc" if col_key == "ticker" else "desc"
+                    if ss["dir"] != initial_dir:
+                        # third click → reset to custom/default
+                        new_state = {"col": None, "dir": "desc"}
+                    else:
+                        # second click → toggle direction
+                        new_state = {"col": col_key, "dir": "desc" if initial_dir == "asc" else "asc"}
+                else:
+                    # first click → set column with initial direction
+                    new_state = {"col": col_key, "dir": "asc" if col_key == "ticker" else "desc"}
+                st.session_state[_ss_key] = new_state
+                st.rerun(scope="fragment")
+
+    # ── Apply sort ────────────────────────────────────────────────────────────
+    display_rows = list(rows)
+    if ss["col"] is not None:
+        ck      = ss["col"]
+        reverse = ss["dir"] == "desc"
+        valid   = [r for r in display_rows if r.get(ck) is not None]
+        nones   = [r for r in display_rows if r.get(ck) is None]
+        valid.sort(key=lambda r: r[ck].lower() if isinstance(r[ck], str) else r[ck], reverse=reverse)
+        display_rows = valid + nones
+
+    # ── Data rows (st.columns for perfect alignment) ──────────────────────────
+    C = "padding:6px 2px;font-family:Courier New;font-size:0.82rem;border-bottom:1px solid rgba(8,120,164,0.15);"
+    for r in display_rows:
         if r["price"] is None:
-            price_str = single_str = today_str = unreal_str = "N/A"
-            single_cls = today_cls = unreal_cls = "neu"
+            price_str = single_str = today_str = unreal_str = "—"
+            s_color = t_color = u_color = "#4a6a8a"
         else:
-            has_data = True
             ps       = r["per_share"]
             ps_sign  = "+" if ps >= 0 else ""
             pct_sign = "+" if r["pct"] >= 0 else ""
@@ -744,41 +856,41 @@ def _render_pnl_table(rows, currency):
             u_sign   = "+" if r["unreal_gain"] >= 0 else ""
             if currency == "TWD":
                 price_str  = f"NT${r['price']:,.2f}"
-                single_str = (f"{ps_sign}NT${abs(ps):.2f} "
-                              f"({pct_sign}{r['pct']:.2f}%)")
+                single_str = f"{ps_sign}NT${abs(ps):.2f} ({pct_sign}{r['pct']:.2f}%)"
                 today_str  = f"{t_sign}NT${abs(r['today_gain']):,.0f}"
-                unreal_str = (f"{u_sign}NT${abs(r['unreal_gain']):,.0f} "
-                              f"({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)")
+                unreal_str = f"{u_sign}NT${abs(r['unreal_gain']):,.0f} ({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)"
             else:
                 price_str  = f"${r['price']:,.2f}"
-                single_str = (f"{ps_sign}${abs(ps):.3f} "
-                              f"({pct_sign}{r['pct']:.2f}%)")
+                single_str = f"{ps_sign}${abs(ps):.3f} ({pct_sign}{r['pct']:.2f}%)"
                 today_str  = f"{t_sign}${abs(r['today_gain']):,.2f}"
-                unreal_str = (f"{u_sign}${abs(r['unreal_gain']):,.2f} "
-                              f"({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)")
-            single_cls = "pos" if ps >= 0 else "neg"
-            today_cls  = "pos" if r["today_gain"] >= 0 else "neg"
-            unreal_cls = "pos" if r["unreal_gain"] >= 0 else "neg"
-            total_today   += r["today_gain"]
-            total_prev_mv += r["prev_close"] * r["shares"]
-            total_unreal  += r["unreal_gain"]
+                unreal_str = f"{u_sign}${abs(r['unreal_gain']):,.2f} ({'+' if r['unreal_pct']>=0 else ''}{r['unreal_pct']:.1f}%)"
+            s_color = "#C05640" if ps >= 0 else "#3DAA70"
+            t_color = "#C05640" if r["today_gain"] >= 0 else "#3DAA70"
+            u_color = "#C05640" if r["unreal_gain"] >= 0 else "#3DAA70"
 
-        st.markdown(f"""
-        <div style='display:grid;
-            grid-template-columns:1.2fr 0.8fr 1.1fr 1.1fr 1.5fr 1.3fr 1.6fr;
-            font-family:Courier New;font-size:0.82rem;
-            padding:6px 8px;
-            background:linear-gradient(135deg,rgba(0,61,115,0.3),rgba(8,120,164,0.06));
-            border:1px solid rgba(8,120,164,0.2);border-radius:7px;margin-bottom:4px;'>
-          <span style='color:#1ECFD6;font-weight:800;'>{r["ticker"]}</span>
-          <span style='color:#d4eaf5;'>{r["shares"]:g}</span>
-          <span style='color:#d4eaf5;'>{_fmt_cost(r["avg_cost"], currency)}</span>
-          <span style='color:#d4eaf5;'>{price_str}</span>
-          <span class='{single_cls}'>{single_str}</span>
-          <span class='{today_cls}'>{today_str}</span>
-          <span class='{unreal_cls}'>{unreal_str}</span>
-        </div>""", unsafe_allow_html=True)
+        dcols = st.columns(widths)
+        with dcols[0]:
+            st.markdown(f"<div style='{C}text-align:center;color:#1ECFD6;font-weight:800;'>{r['ticker']}</div>", unsafe_allow_html=True)
+        with dcols[1]:
+            st.markdown(f"<div style='{C}text-align:right;color:#d4eaf5;'>{r['shares']:g}</div>", unsafe_allow_html=True)
+        with dcols[2]:
+            st.markdown(f"<div style='{C}text-align:right;color:#d4eaf5;'>{_fmt_cost(r['avg_cost'], currency)}</div>", unsafe_allow_html=True)
+        with dcols[3]:
+            st.markdown(f"<div style='{C}text-align:right;color:#d4eaf5;'>{price_str}</div>", unsafe_allow_html=True)
+        with dcols[4]:
+            st.markdown(f"<div style='{C}text-align:right;color:{s_color};'>{single_str}</div>", unsafe_allow_html=True)
+        with dcols[5]:
+            st.markdown(f"<div style='{C}text-align:right;color:{t_color};'>{today_str}</div>", unsafe_allow_html=True)
+        with dcols[6]:
+            st.markdown(f"<div style='{C}text-align:right;color:{u_color};'>{unreal_str}</div>", unsafe_allow_html=True)
 
+
+def _render_pnl_table(rows, currency, sort_key="pnl"):
+    total_today   = sum(r["today_gain"]              for r in rows if r["price"] is not None)
+    total_prev_mv = sum(r["prev_close"] * r["shares"] for r in rows if r["price"] is not None)
+    total_unreal  = sum(r["unreal_gain"]              for r in rows if r["price"] is not None)
+    has_data      = any(r["price"] is not None        for r in rows)
+    _pnl_sort_fragment(rows, currency, sort_key)
     return total_today, total_prev_mv, total_unreal, has_data
 
 
@@ -1157,410 +1269,371 @@ def _render_manage_tab(acct_key, currency):
 
     # ── Drag-to-reorder ────────────────────────────────────────────────────
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    _sort_key = f"show_sort_port_{acct_key}"
-    _show_sort = st.session_state.get(_sort_key, False)
-    _sort_label = "↕ 收起排序 ▲" if _show_sort else "↕ 調整持倉順序 ▼"
-    if st.button(_sort_label, key=f"sort_toggle_{acct_key}"):
-        _show_sort = not _show_sort
-        st.session_state[_sort_key] = _show_sort
-
-    if _show_sort and positions:
-        _port_sortable_style = """
-        .sortable-component {
-            background: rgba(0,29,58,0.7);
-            border: 1px solid rgba(8,120,164,0.3);
-            border-radius: 8px;
-            padding: 6px 8px;
-            min-height: 44px;
-        }
-        .sortable-item {
-            background-color: rgba(0,45,90,0.9) !important;
-            border: 1px solid rgba(8,120,164,0.4) !important;
-            color: #7ecde4 !important;
-            font-family: 'Courier New', monospace !important;
-            font-weight: 700 !important;
-            font-size: 0.8rem !important;
-            letter-spacing: 0.08em !important;
-            border-radius: 5px !important;
-        }
-        .sortable-item:hover {
-            background-color: rgba(8,120,164,0.25) !important;
-            border-color: rgba(30,207,214,0.45) !important;
-            color: #1ECFD6 !important;
-        }
-        """
-        _ticker_list = list(positions.keys())
-        _new_order = sort_items(
-            _ticker_list,
-            direction="horizontal",
-            custom_style=_port_sortable_style,
-            key=f"port_drag_{acct_key}",
-        )
-        if _new_order != _ticker_list:
-            reordered = {t: positions[t] for t in _new_order if t in positions}
-            st.session_state.portfolio[acct_key]["positions"] = reordered
-            save_config(st.session_state.group_tickers, st.session_state.portfolio)
-            st.rerun()
+    _manage_reorder_fragment(acct_key, currency)
 
 
-# ── Header ────────────────────────────────────────────────────────────────────
-ms_text, ms_cls, et_now = market_status()
+@st.fragment(run_every=30)
+def _dashboard_fragment():
+    # ── Header ────────────────────────────────────────────────────────────────
+    ms_text, ms_cls, et_now = market_status()
 
-hc1, hc2 = st.columns([5, 1])
-with hc1:
-    st.markdown(f"""
-    <div style="display:flex;align-items:center;gap:14px;padding:2px 0 0;">
-        <span class="dash-title">◈ STOCK DASHBOARD</span>
-        <span class="status-pill {ms_cls}">{ms_text}</span>
-        <span style="color:#475569;font-family:'Courier New';font-size:0.78rem;">
-            ET {et_now.strftime('%H:%M:%S')}
-        </span>
-    </div>""", unsafe_allow_html=True)
-
-with hc2:
-    if st.button("↻ REFRESH", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-# Countdown + thin divider — all in one compact HTML block, no extra Streamlit elements
-st.components.v1.html("""
-<div style="display:flex;align-items:center;gap:0;margin-top:2px;">
-    <div id="cd" style="
-        color:#1ECFD6;
-        font-family:'Courier New',monospace;
-        font-size:0.7rem;
-        letter-spacing:0.06em;
-        flex:1;
-    "></div>
-</div>
-<hr style="border:none;border-top:1px solid rgba(8,120,164,0.25);margin:4px 0 0;">
-<script>
-// Force-remove padding Streamlit sets for the header bar
-(function(){
-    const sel = [
-        '[data-testid="stMainBlockContainer"]',
-        '[data-testid="stMain"] > div',
-        '.block-container'
-    ];
-    sel.forEach(s => {
-        const el = window.parent.document.querySelector(s);
-        if (el) el.style.paddingTop = '0.3rem';
-    });
-})();
-
-let n = 30;
-(function tick() {
-    document.getElementById('cd').innerText = '↻  next data update in ' + n + 's  ·  prices ~15s delayed (Yahoo Finance)';
-    n = n > 0 ? n - 1 : 30;
-    setTimeout(tick, 1000);
-})();
-</script>""", height=26)
-
-# ── Tabs ──────────────────────────────────────────────────────────────────────
-tabs = st.tabs(["💼 持倉"] + list(GROUPS.keys()))
-
-for tab, gname in zip(tabs[1:], GROUPS.keys()):
-    with tab:
-        tickers = tuple(st.session_state.group_tickers[gname])
-        results = fetch_quotes(tickers)
-
-        valid = [r for r in results if r["pct"] is not None]
-        up    = sum(1 for r in valid if r["pct"] > 0)
-        down  = sum(1 for r in valid if r["pct"] < 0)
-        flat  = len(valid) - up - down
-
+    hc1, hc2 = st.columns([5, 1])
+    with hc1:
         st.markdown(f"""
-        <div style="display:flex;gap:20px;margin-bottom:12px;
-                    font-family:'Courier New';font-size:0.75rem;align-items:center;">
-            <span style="color:#C05640;">▲&nbsp;{up}&nbsp;UP</span>
-            <span style="color:#3DAA70;">▼&nbsp;{down}&nbsp;DOWN</span>
-            <span style="color:#0878A4;">◆&nbsp;{flat}&nbsp;FLAT</span>
-            <span style="color:#2d4a6a;margin-left:auto;font-size:0.68rem;">
-                {len(valid)}/{len(tickers)} loaded · 30s cache
+        <div style="display:flex;align-items:center;gap:14px;padding:2px 0 0;">
+            <span class="dash-title">◈ STOCK DASHBOARD</span>
+            <span class="status-pill {ms_cls}">{ms_text}</span>
+            <span style="color:#475569;font-family:'Courier New';font-size:0.78rem;">
+                ET {et_now.strftime('%H:%M:%S')}
             </span>
         </div>""", unsafe_allow_html=True)
-
-        n      = len(tickers)
-        n_cols = n if n <= 3 else (3 if n <= 6 else 4)
-
-        view_card, view_pie, view_bar, view_pre = st.tabs(["📋 Cards", "🥧 圓餅圖", "📊 長條圖", "🌅 盤前/後"])
-
-        with view_card:
-            # ── Sort ─────────────────────────────────────────────────────
-            sort_col, _ = st.columns([2, 6])
-            with sort_col:
-                sort_by = st.selectbox(
-                    "排序", ["自訂順序", "漲幅 ↓", "漲幅 ↑", "代號 A→Z", "價格 ↓"],
-                    key=f"sort_{gname}", label_visibility="collapsed",
-                )
-            def sort_results(rs):
-                if sort_by == "自訂順序":
-                    return rs
-                def key(r):
-                    if sort_by == "漲幅 ↓":
-                        return -(r["pct"] or -999)
-                    if sort_by == "漲幅 ↑":
-                        return (r["pct"] or 999)
-                    if sort_by == "代號 A→Z":
-                        return r["ticker"]
-                    return -(r["price"] or 0)
-                return sorted(rs, key=key)
-            sorted_results = sort_results(results)
-
-            # ── Add / remove tickers ─────────────────────────────────────
-            with st.expander("＋ 編輯股票清單"):
-                _grp_inp_key = f"inp_{gname}"
-                def _to_upper_grp(_k=_grp_inp_key):
-                    st.session_state[_k] = st.session_state[_k].upper()
-
-                c_input, c_btn = st.columns([4, 1])
-                with c_input:
-                    new_t = st.text_input(
-                        "新增代號", placeholder="e.g. META",
-                        key=_grp_inp_key, label_visibility="collapsed",
-                        on_change=_to_upper_grp,
+    
+    with hc2:
+        if st.button("↻ REFRESH", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
+    # Countdown + thin divider — all in one compact HTML block, no extra Streamlit elements
+    st.components.v1.html("""
+    <div style="display:flex;align-items:center;gap:0;margin-top:2px;">
+        <div id="cd" style="
+            color:#1ECFD6;
+            font-family:'Courier New',monospace;
+            font-size:0.7rem;
+            letter-spacing:0.06em;
+            flex:1;
+        "></div>
+    </div>
+    <hr style="border:none;border-top:1px solid rgba(8,120,164,0.25);margin:4px 0 0;">
+    <script>
+    // Force-remove padding Streamlit sets for the header bar
+    (function(){
+        const sel = [
+            '[data-testid="stMainBlockContainer"]',
+            '[data-testid="stMain"] > div',
+            '.block-container'
+        ];
+        sel.forEach(s => {
+            const el = window.parent.document.querySelector(s);
+            if (el) el.style.paddingTop = '0.3rem';
+        });
+    })();
+    
+    let n = 30;
+    (function tick() {
+        document.getElementById('cd').innerText = '↻  next data update in ' + n + 's  ·  prices ~15s delayed (Yahoo Finance)';
+        n = n > 0 ? n - 1 : 30;
+        setTimeout(tick, 1000);
+    })();
+    </script>""", height=26)
+    
+    # ── Tabs ──────────────────────────────────────────────────────────────────────
+    tabs = st.tabs(["💼 持倉"] + list(GROUPS.keys()))
+    
+    for tab, gname in zip(tabs[1:], GROUPS.keys()):
+        with tab:
+            tickers = tuple(st.session_state.group_tickers[gname])
+            results = fetch_quotes(tickers)
+    
+            valid = [r for r in results if r["pct"] is not None]
+            up    = sum(1 for r in valid if r["pct"] > 0)
+            down  = sum(1 for r in valid if r["pct"] < 0)
+            flat  = len(valid) - up - down
+    
+            st.markdown(f"""
+            <div style="display:flex;gap:20px;margin-bottom:12px;
+                        font-family:'Courier New';font-size:0.75rem;align-items:center;">
+                <span style="color:#C05640;">▲&nbsp;{up}&nbsp;UP</span>
+                <span style="color:#3DAA70;">▼&nbsp;{down}&nbsp;DOWN</span>
+                <span style="color:#0878A4;">◆&nbsp;{flat}&nbsp;FLAT</span>
+                <span style="color:#2d4a6a;margin-left:auto;font-size:0.68rem;">
+                    {len(valid)}/{len(tickers)} loaded · 30s cache
+                </span>
+            </div>""", unsafe_allow_html=True)
+    
+            n      = len(tickers)
+            n_cols = n if n <= 3 else (3 if n <= 6 else 4)
+    
+            view_card, view_pie, view_bar, view_pre = st.tabs(["📋 Cards", "🥧 圓餅圖", "📊 長條圖", "🌅 盤前/後"])
+    
+            with view_card:
+                # ── Sort ─────────────────────────────────────────────────────
+                sort_col, _ = st.columns([2, 6])
+                with sort_col:
+                    sort_by = st.selectbox(
+                        "排序", ["自訂順序", "漲幅 ↓", "漲幅 ↑", "代號 A→Z", "價格 ↓"],
+                        key=f"sort_{gname}", label_visibility="collapsed",
                     )
-                with c_btn:
-                    _grp_add_clicked = st.button("新增", key=f"add_{gname}", use_container_width=True)
-
-                if _grp_add_clicked:
-                    t = new_t.strip().upper()
-                    if not t:
-                        st.error("請輸入股票代號")
-                    elif t in st.session_state.group_tickers[gname]:
-                        st.warning(f"「{t}」已在清單中")
-                    elif not _ticker_exists(t):
-                        st.error(f"找不到股票代號「{t}」，請確認代號是否正確")
-                    else:
-                        st.session_state.group_tickers[gname].append(t)
-                        save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                        st.cache_data.clear()
-                        st.rerun()
-
-                # Chip-style remove buttons
-                st.markdown(
-                    "<div style='font-family:Courier New;font-size:0.72rem;"
-                    "color:#4a6a8a;margin:6px 0 4px;'>點擊代號移除：</div>",
-                    unsafe_allow_html=True,
-                )
-                chip_cols = st.columns(min(len(tickers), 8))
-                for ci, t in enumerate(tickers):
-                    with chip_cols[ci % len(chip_cols)]:
-                        st.markdown('<div class="chip-btn">', unsafe_allow_html=True)
-                        if st.button(f"✕ {t}", key=f"rm_{gname}_{t}"):
-                            st.session_state.group_tickers[gname].remove(t)
+                def sort_results(rs):
+                    if sort_by == "自訂順序":
+                        return rs
+                    def key(r):
+                        if sort_by == "漲幅 ↓":
+                            return -(r["pct"] or -999)
+                        if sort_by == "漲幅 ↑":
+                            return (r["pct"] or 999)
+                        if sort_by == "代號 A→Z":
+                            return r["ticker"]
+                        return -(r["price"] or 0)
+                    return sorted(rs, key=key)
+                sorted_results = sort_results(results)
+    
+                # ── Add / remove tickers ─────────────────────────────────────
+                with st.expander("＋ 編輯股票清單"):
+                    _grp_inp_key = f"inp_{gname}"
+                    def _to_upper_grp(_k=_grp_inp_key):
+                        st.session_state[_k] = st.session_state[_k].upper()
+    
+                    c_input, c_btn = st.columns([4, 1])
+                    with c_input:
+                        new_t = st.text_input(
+                            "新增代號", placeholder="e.g. META",
+                            key=_grp_inp_key, label_visibility="collapsed",
+                            on_change=_to_upper_grp,
+                        )
+                    with c_btn:
+                        _grp_add_clicked = st.button("新增", key=f"add_{gname}", use_container_width=True)
+    
+                    if _grp_add_clicked:
+                        t = new_t.strip().upper()
+                        if not t:
+                            st.error("請輸入股票代號")
+                        elif t in st.session_state.group_tickers[gname]:
+                            st.warning(f"「{t}」已在清單中")
+                        elif not _ticker_exists(t):
+                            st.error(f"找不到股票代號「{t}」，請確認代號是否正確")
+                        else:
+                            st.session_state.group_tickers[gname].append(t)
                             save_config(st.session_state.group_tickers, st.session_state.portfolio)
                             st.cache_data.clear()
                             st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-            if sort_by == "自訂順序":
-                _show_drag = st.session_state.get(f"show_drag_{gname}", False)
-                drag_label = "↕ 收起排序 ▲" if _show_drag else "↕ 調整排序順序 ▼"
-                if st.button(drag_label, key=f"toggle_drag_{gname}"):
-                    _show_drag = not _show_drag
-                    st.session_state[f"show_drag_{gname}"] = _show_drag
-
-                if _show_drag:
-                    _sortable_style = """
-                    .sortable-component {
-                        background: rgba(0,29,58,0.7);
-                        border: 1px solid rgba(8,120,164,0.3);
-                        border-radius: 8px;
-                        padding: 6px 8px;
-                        min-height: 44px;
-                    }
-                    .sortable-item {
-                        background-color: rgba(0,45,90,0.9) !important;
-                        border: 1px solid rgba(8,120,164,0.4) !important;
-                        color: #7ecde4 !important;
-                        font-family: 'Courier New', monospace !important;
-                        font-weight: 700 !important;
-                        font-size: 0.8rem !important;
-                        letter-spacing: 0.08em !important;
-                        border-radius: 5px !important;
-                    }
-                    .sortable-item:hover {
-                        background-color: rgba(8,120,164,0.25) !important;
-                        border-color: rgba(30,207,214,0.45) !important;
-                        color: #1ECFD6 !important;
-                    }
-                    """
-                    new_order = sort_items(
-                        list(st.session_state.group_tickers[gname]),
-                        direction="horizontal",
-                        custom_style=_sortable_style,
-                        key=f"drag_{gname}",
-                    )
-                    if new_order != st.session_state.group_tickers[gname]:
-                        st.session_state.group_tickers[gname] = new_order
-                        save_config(st.session_state.group_tickers, st.session_state.portfolio)
-                        order_map = {t: i for i, t in enumerate(new_order)}
-                        sorted_results = sorted(results, key=lambda r: order_map.get(r["ticker"], 999))
-
-            render_grid(sorted_results, n_cols)
-
-        with view_pie:
-            st.plotly_chart(
-                donut_chart(results),
-                use_container_width=True,
-                config={"displayModeBar": False},
-            )
-
-        with view_bar:
-            st.plotly_chart(
-                bar_chart(results),
-                use_container_width=True,
-                config={"displayModeBar": False},
-            )
-
-        with view_pre:
-            ms_now, _, _ = market_status()
-            if ms_now == "OPEN":
-                label = "盤中報價（含盤前延伸）"
-                note  = "市場交易中 · 1 分鐘延遲 · 對比前一交易日收盤"
-            elif ms_now == "PRE/POST":
-                label = "盤前 / 盤後報價"
-                note  = "盤前 04:00–09:30 ET  |  盤後 16:00–20:00 ET · 對比前一交易日收盤"
-            else:
-                label = "最後盤後報價"
-                note  = "市場已收盤 · 顯示最後一筆延伸交易報價"
-
-            st.markdown(
-                f"<div style='font-family:Courier New;font-size:0.72rem;"
-                f"color:#4a6a8a;margin-bottom:10px;'>{note}</div>",
-                unsafe_allow_html=True,
-            )
-            pre_results = fetch_premarket(tickers)
-            for i in range(0, len(pre_results), n_cols):
-                chunk = pre_results[i:i+n_cols]
-                chunk += [None] * (n_cols - len(chunk))
-                cols = st.columns(n_cols)
-                for col, item in zip(cols, chunk):
-                    with col:
-                        if item:
-                            st.markdown(
-                                premarket_card_html(
-                                    item["ticker"], item["price"], item["pct"],
-                                    item["prev_close"], item["time"],
-                                ),
-                                unsafe_allow_html=True,
-                            )
-
-# ── 持倉 Tab ──────────────────────────────────────────────────────────────────
-with tabs[0]:
-    acct_tabs = st.tabs([
-        "📊 整體損益",
-        "🏦 複委託（台幣戶）",
-        "🏦 複委託（美金戶）",
-        "🇹🇼 台股帳戶",
-    ])
-
-    # ── 整體損益 ─────────────────────────────────────────────────────────────
-    with acct_tabs[0]:
-        _usd_rows_by_acct = {
-            "複委託（台幣戶）": _portfolio_rows("複委託（台幣戶）"),
-            "複委託（美金戶）": _portfolio_rows("複委託（美金戶）"),
-        }
-        usd_rows = _usd_rows_by_acct["複委託（台幣戶）"] + _usd_rows_by_acct["複委託（美金戶）"]
-        twd_rows = _portfolio_rows("台股帳戶")
-
-        if not usd_rows and not twd_rows:
-            st.markdown(
-                "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
-                "尚無持倉，請先在各帳戶分頁新增。</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            if usd_rows:
-                st.markdown(
-                    "<div style='font-family:Courier New;color:#EDD170;"
-                    "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
-                    "margin:8px 0 12px;'>◈ 美股市場 (USD)</div>",
-                    unsafe_allow_html=True,
-                )
-                _sub_totals = []
-                for _sub_ak, _sub_label in [
-                    ("複委託（台幣戶）", "🏦 複委託（台幣戶）"),
-                    ("複委託（美金戶）", "🏦 複委託（美金戶）"),
-                ]:
-                    _sub_rows = _usd_rows_by_acct[_sub_ak]
-                    if not _sub_rows:
-                        continue
+    
+                    # Chip-style remove buttons
                     st.markdown(
-                        f"<div style='font-family:Courier New;font-size:0.74rem;font-weight:700;"
-                        f"color:#7ecde4;letter-spacing:0.08em;"
-                        f"padding:4px 0 4px 10px;"
-                        f"border-left:2px solid rgba(30,207,214,0.45);"
-                        f"margin:8px 0 6px;'>{_sub_label}</div>",
+                        "<div style='font-family:Courier New;font-size:0.72rem;"
+                        "color:#4a6a8a;margin:6px 0 4px;'>點擊代號移除：</div>",
                         unsafe_allow_html=True,
                     )
-                    _st, _spm, _su, _shd = _render_pnl_table(_sub_rows, "USD")
-                    _sub_totals.append((_st, _spm, _su, _shd))
-                    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-
-                st.markdown(
-                    "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
-                    unsafe_allow_html=True,
+                    chip_cols = st.columns(min(len(tickers), 8))
+                    for ci, t in enumerate(tickers):
+                        with chip_cols[ci % len(chip_cols)]:
+                            st.markdown('<div class="chip-btn">', unsafe_allow_html=True)
+                            if st.button(f"✕ {t}", key=f"rm_{gname}_{t}"):
+                                st.session_state.group_tickers[gname].remove(t)
+                                save_config(st.session_state.group_tickers, st.session_state.portfolio)
+                                st.cache_data.clear()
+                                st.rerun()
+                            st.markdown("</div>", unsafe_allow_html=True)
+    
+                if sort_by == "自訂順序":
+                    _show_drag = st.session_state.get(f"show_drag_{gname}", False)
+                    drag_label = "↕ 收起排序 ▲" if _show_drag else "↕ 調整排序順序 ▼"
+                    if st.button(drag_label, key=f"toggle_drag_{gname}"):
+                        _show_drag = not _show_drag
+                        st.session_state[f"show_drag_{gname}"] = _show_drag
+    
+                    if _show_drag:
+                        _sortable_style = """
+                        .sortable-component {
+                            background: rgba(0,29,58,0.7);
+                            border: 1px solid rgba(8,120,164,0.3);
+                            border-radius: 8px;
+                            padding: 6px 8px;
+                            min-height: 44px;
+                        }
+                        .sortable-item {
+                            background-color: rgba(0,45,90,0.9) !important;
+                            border: 1px solid rgba(8,120,164,0.4) !important;
+                            color: #7ecde4 !important;
+                            font-family: 'Courier New', monospace !important;
+                            font-weight: 700 !important;
+                            font-size: 0.8rem !important;
+                            letter-spacing: 0.08em !important;
+                            border-radius: 5px !important;
+                        }
+                        .sortable-item:hover {
+                            background-color: rgba(8,120,164,0.25) !important;
+                            border-color: rgba(30,207,214,0.45) !important;
+                            color: #1ECFD6 !important;
+                        }
+                        """
+                        new_order = sort_items(
+                            list(st.session_state.group_tickers[gname]),
+                            direction="horizontal",
+                            custom_style=_sortable_style,
+                            key=f"drag_{gname}",
+                        )
+                        if new_order != st.session_state.group_tickers[gname]:
+                            st.session_state.group_tickers[gname] = new_order
+                            save_config(st.session_state.group_tickers, st.session_state.portfolio)
+                            order_map = {t: i for i, t in enumerate(new_order)}
+                            sorted_results = sorted(results, key=lambda r: order_map.get(r["ticker"], 999))
+    
+                render_grid(sorted_results, n_cols)
+    
+            with view_pie:
+                st.plotly_chart(
+                    donut_chart(results),
+                    use_container_width=True,
+                    config={"displayModeBar": False},
                 )
-                if _sub_totals:
-                    _t  = sum(x[0] for x in _sub_totals)
-                    _pm = sum(x[1] for x in _sub_totals)
-                    _u  = sum(x[2] for x in _sub_totals)
-                    _hd = any(x[3] for x in _sub_totals)
-                    if _hd:
-                        _render_summary_bar(_t, _pm, _u, "USD")
-                _render_pnl_chart(usd_rows, "USD", key_prefix="overall_usd")
-
-            if twd_rows:
-                if usd_rows:
-                    st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
-                st.markdown(
-                    "<div style='font-family:Courier New;color:#EDD170;"
-                    "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
-                    "margin:8px 0 10px;'>◈ 台股市場 (TWD)</div>",
-                    unsafe_allow_html=True,
+    
+            with view_bar:
+                st.plotly_chart(
+                    bar_chart(results),
+                    use_container_width=True,
+                    config={"displayModeBar": False},
                 )
-                _t, _pm, _u, _hd = _render_pnl_table(twd_rows, "TWD")
-                st.markdown(
-                    "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
-                    unsafe_allow_html=True,
-                )
-                if _hd:
-                    _render_summary_bar(_t, _pm, _u, "TWD")
-                _render_pnl_chart(twd_rows, "TWD", key_prefix="overall_twd")
-
-    # ── Per-account tabs ──────────────────────────────────────────────────────
-    for _acct_tab, (_acct_key, _currency) in zip(acct_tabs[1:], _ACCT_MAP):
-        with _acct_tab:
-            pnl_tab, manage_tab = st.tabs(["💰 今日損益", "📝 持倉管理"])
-
-            with pnl_tab:
-                rows = _portfolio_rows(_acct_key)
-                if not rows:
-                    st.markdown(
-                        "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
-                        "尚無持倉，請先至「📝 持倉管理」新增。</div>",
-                        unsafe_allow_html=True,
-                    )
+    
+            with view_pre:
+                ms_now, _, _ = market_status()
+                if ms_now == "OPEN":
+                    label = "盤中報價（含盤前延伸）"
+                    note  = "市場交易中 · 1 分鐘延遲 · 對比前一交易日收盤"
+                elif ms_now == "PRE/POST":
+                    label = "盤前 / 盤後報價"
+                    note  = "盤前 04:00–09:30 ET  |  盤後 16:00–20:00 ET · 對比前一交易日收盤"
                 else:
-                    _t, _pm, _u, _hd = _render_pnl_table(rows, _currency)
+                    label = "最後盤後報價"
+                    note  = "市場已收盤 · 顯示最後一筆延伸交易報價"
+    
+                st.markdown(
+                    f"<div style='font-family:Courier New;font-size:0.72rem;"
+                    f"color:#4a6a8a;margin-bottom:10px;'>{note}</div>",
+                    unsafe_allow_html=True,
+                )
+                pre_results = fetch_premarket(tickers)
+                for i in range(0, len(pre_results), n_cols):
+                    chunk = pre_results[i:i+n_cols]
+                    chunk += [None] * (n_cols - len(chunk))
+                    cols = st.columns(n_cols)
+                    for col, item in zip(cols, chunk):
+                        with col:
+                            if item:
+                                st.markdown(
+                                    premarket_card_html(
+                                        item["ticker"], item["price"], item["pct"],
+                                        item["prev_close"], item["time"],
+                                    ),
+                                    unsafe_allow_html=True,
+                                )
+    
+    # ── 持倉 Tab ──────────────────────────────────────────────────────────────────
+    with tabs[0]:
+        acct_tabs = st.tabs([
+            "📊 整體損益",
+            "🏦 複委託（台幣戶）",
+            "🏦 複委託（美金戶）",
+            "🇹🇼 台股帳戶",
+        ])
+    
+        # ── 整體損益 ─────────────────────────────────────────────────────────────
+        with acct_tabs[0]:
+            _usd_rows_by_acct = {
+                "複委託（台幣戶）": _portfolio_rows("複委託（台幣戶）"),
+                "複委託（美金戶）": _portfolio_rows("複委託（美金戶）"),
+            }
+            usd_rows = _usd_rows_by_acct["複委託（台幣戶）"] + _usd_rows_by_acct["複委託（美金戶）"]
+            twd_rows = _portfolio_rows("台股帳戶")
+    
+            if not usd_rows and not twd_rows:
+                st.markdown(
+                    "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
+                    "尚無持倉，請先在各帳戶分頁新增。</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                if usd_rows:
+                    st.markdown(
+                        "<div style='font-family:Courier New;color:#EDD170;"
+                        "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
+                        "margin:8px 0 12px;'>◈ 美股市場 (USD)</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _sub_totals = []
+                    for _sub_ak, _sub_label in [
+                        ("複委託（台幣戶）", "🏦 複委託（台幣戶）"),
+                        ("複委託（美金戶）", "🏦 複委託（美金戶）"),
+                    ]:
+                        _sub_rows = _usd_rows_by_acct[_sub_ak]
+                        if not _sub_rows:
+                            continue
+                        st.markdown(
+                            f"<div style='font-family:Courier New;font-size:0.74rem;font-weight:700;"
+                            f"color:#7ecde4;letter-spacing:0.08em;"
+                            f"padding:4px 0 4px 10px;"
+                            f"border-left:2px solid rgba(30,207,214,0.45);"
+                            f"margin:8px 0 6px;'>{_sub_label}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        _st, _spm, _su, _shd = _render_pnl_table(_sub_rows, "USD", sort_key=f"ov_{_sub_ak}")
+                        _sub_totals.append((_st, _spm, _su, _shd))
+                        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+    
+                    st.markdown(
+                        "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
+                        unsafe_allow_html=True,
+                    )
+                    if _sub_totals:
+                        _t  = sum(x[0] for x in _sub_totals)
+                        _pm = sum(x[1] for x in _sub_totals)
+                        _u  = sum(x[2] for x in _sub_totals)
+                        _hd = any(x[3] for x in _sub_totals)
+                        if _hd:
+                            _render_summary_bar(_t, _pm, _u, "USD")
+                    _render_pnl_chart(usd_rows, "USD", key_prefix="overall_usd")
+    
+                if twd_rows:
+                    if usd_rows:
+                        st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+                    st.markdown(
+                        "<div style='font-family:Courier New;color:#EDD170;"
+                        "font-size:0.82rem;font-weight:700;letter-spacing:0.12em;"
+                        "margin:8px 0 10px;'>◈ 台股市場 (TWD)</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _t, _pm, _u, _hd = _render_pnl_table(twd_rows, "TWD", sort_key="ov_twd")
                     st.markdown(
                         "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
                         unsafe_allow_html=True,
                     )
                     if _hd:
-                        _render_summary_bar(_t, _pm, _u, _currency)
-                    else:
+                        _render_summary_bar(_t, _pm, _u, "TWD")
+                    _render_pnl_chart(twd_rows, "TWD", key_prefix="overall_twd")
+    
+        # ── Per-account tabs ──────────────────────────────────────────────────────
+        for _acct_tab, (_acct_key, _currency) in zip(acct_tabs[1:], _ACCT_MAP):
+            with _acct_tab:
+                pnl_tab, manage_tab = st.tabs(["💰 今日損益", "📝 持倉管理"])
+    
+                with pnl_tab:
+                    rows = _portfolio_rows(_acct_key)
+                    if not rows:
                         st.markdown(
                             "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
-                            "無法取得報價，請稍後再試。</div>",
+                            "尚無持倉，請先至「📝 持倉管理」新增。</div>",
                             unsafe_allow_html=True,
                         )
-                    _render_pnl_chart(rows, _currency, key_prefix=f"acct_{_acct_key}")
-
-            with manage_tab:
-                _render_manage_tab(_acct_key, _currency)
+                    else:
+                        _t, _pm, _u, _hd = _render_pnl_table(rows, _currency, sort_key=_acct_key)
+                        st.markdown(
+                            "<hr style='border-color:rgba(8,120,164,0.3);margin:12px 0 10px;'>",
+                            unsafe_allow_html=True,
+                        )
+                        if _hd:
+                            _render_summary_bar(_t, _pm, _u, _currency)
+                        else:
+                            st.markdown(
+                                "<div style='font-family:Courier New;color:#2d4a6a;font-size:0.82rem;'>"
+                                "無法取得報價，請稍後再試。</div>",
+                                unsafe_allow_html=True,
+                            )
+                        _render_pnl_chart(rows, _currency, key_prefix=f"acct_{_acct_key}")
+    
+                with manage_tab:
+                    _render_manage_tab(_acct_key, _currency)
+    
+_dashboard_fragment()
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
