@@ -19,22 +19,28 @@ interface ColDef {
   fmt: (row: PortfolioRow) => string;
 }
 
-const REQUIRED_COLS = new Set(["ticker", "today_gain", "unreal_gain"]);
+// Only ticker is always shown; everything else is optional
+const VIS_KEY   = "pnl-cols-v3";
+const ORDER_KEY = "pnl-cols-order-v2";
 
-const VIS_KEY   = "pnl-cols-v2";
-const ORDER_KEY = "pnl-cols-order";
-
-type OptColId = "shares" | "avg_cost" | "price" | "per_share" | "pct" | "day_high" | "day_low" | "volume";
+type OptColId =
+  | "shares" | "avg_cost" | "cost_basis" | "price"
+  | "day_high" | "day_low" | "volume"
+  | "per_share" | "pct"
+  | "today_gain" | "unreal_gain";
 
 const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
-  { id: "shares",    label: "股數",    defaultOn: true  },
-  { id: "avg_cost",  label: "成本",    defaultOn: true  },
-  { id: "price",     label: "現價",    defaultOn: true  },
-  { id: "per_share", label: "單股漲跌", defaultOn: true  },
-  { id: "pct",       label: "漲跌%",   defaultOn: true  },
-  { id: "day_high",  label: "最高",    defaultOn: false },
-  { id: "day_low",   label: "最低",    defaultOn: false },
-  { id: "volume",    label: "成交量",  defaultOn: false },
+  { id: "shares",      label: "股數",      defaultOn: true  },
+  { id: "avg_cost",    label: "單股成本",   defaultOn: true  },
+  { id: "cost_basis",  label: "總成本",     defaultOn: false },
+  { id: "price",       label: "現價",      defaultOn: true  },
+  { id: "day_high",    label: "每日最高",   defaultOn: false },
+  { id: "day_low",     label: "每日最低",   defaultOn: false },
+  { id: "volume",      label: "成交量",     defaultOn: false },
+  { id: "per_share",   label: "單股漲跌",   defaultOn: true  },
+  { id: "pct",         label: "漲跌%",     defaultOn: true  },
+  { id: "today_gain",  label: "今日損益",   defaultOn: true  },
+  { id: "unreal_gain", label: "未實現損益", defaultOn: true  },
 ];
 
 const DEFAULT_ORDER = OPT_COLS.map(c => c.id);
@@ -71,40 +77,34 @@ function saveColOrder(order: OptColId[]) {
 }
 
 function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[]): ColDef[] {
-  const sym = currency === "TWD" ? "NT$" : "USD";
+  const sym      = currency === "TWD" ? "NT$" : "USD";
   const priceSym = currency === "TWD" ? "NT$" : "$";
-  const d = currency === "TWD" ? 2 : 3;
+  const d        = currency === "TWD" ? 2 : 3;
 
-  const OPT_DEFS: Record<string, ColDef> = {
-    shares:    { key: "shares",    label: "股數",    fmt: r => r.shares.toLocaleString() },
-    avg_cost:  { key: "avg_cost",  label: `成本 (${sym})`, fmt: r => r.avg_cost.toFixed(3) },
-    price:     { key: "price",     label: "現價",    fmt: r => r.price !== null ? `${priceSym}${r.price.toFixed(2)}` : "—" },
-    per_share: { key: "per_share", label: "單股漲跌", fmt: r => {
+  const DEFS: Record<string, ColDef> = {
+    shares:      { key: "shares",      label: "股數",    fmt: r => r.shares.toLocaleString() },
+    avg_cost:    { key: "avg_cost",    label: `單股成本 (${sym})`, fmt: r => r.avg_cost.toFixed(3) },
+    cost_basis:  { key: "cost_basis",  label: `總成本 (${sym})`,  fmt: r => fmtMoney(r.cost_basis, currency) },
+    price:       { key: "price",       label: "現價",    fmt: r => r.price !== null ? `${priceSym}${r.price.toFixed(2)}` : "—" },
+    day_high:    { key: "day_high" as Col, label: "每日最高", fmt: r => r.day_high !== null ? `${priceSym}${r.day_high.toFixed(2)}` : "—" },
+    day_low:     { key: "day_low"  as Col, label: "每日最低", fmt: r => r.day_low  !== null ? `${priceSym}${r.day_low.toFixed(2)}`  : "—" },
+    volume:      { key: "volume"   as Col, label: "成交量", fmt: r => r.volume !== null ? Math.round(r.volume).toLocaleString() : "—" },
+    per_share:   { key: "per_share",   label: "單股漲跌", fmt: r => {
       if (r.per_share === null) return "—";
       return `${r.per_share >= 0 ? "+" : ""}${priceSym}${Math.abs(r.per_share).toFixed(d)}`;
     }},
-    pct:       { key: "pct",       label: "漲跌%",   fmt: r => r.pct !== null ? fmtPct(r.pct) : "—" },
-    day_high:  { key: "day_high" as Col, label: "最高", fmt: r => r.day_high !== null ? `${priceSym}${r.day_high.toFixed(2)}` : "—" },
-    day_low:   { key: "day_low"  as Col, label: "最低", fmt: r => r.day_low  !== null ? `${priceSym}${r.day_low.toFixed(2)}`  : "—" },
-    volume:    { key: "volume"   as Col, label: "成交量", fmt: r => r.volume !== null ? Math.round(r.volume).toLocaleString() : "—" },
-  };
-
-  const ticker: ColDef    = { key: "ticker",     label: "代號", fmt: r => r.ticker };
-  const todayGain: ColDef = { key: "today_gain", label: `今日總損益 (${sym})`,
-    fmt: r => r.today_gain !== null ? fmtMoney(r.today_gain, currency) : "—" };
-  const unreal: ColDef    = { key: "unreal_gain", label: "未實現損益",
-    fmt: r => {
+    pct:         { key: "pct",         label: "漲跌%",   fmt: r => r.pct !== null ? fmtPct(r.pct) : "—" },
+    today_gain:  { key: "today_gain",  label: `今日損益 (${sym})`,   fmt: r => r.today_gain  !== null ? fmtMoney(r.today_gain, currency)  : "—" },
+    unreal_gain: { key: "unreal_gain", label: `未實現損益 (${sym})`, fmt: r => {
       if (r.unreal_gain === null) return "—";
       const pct = r.unreal_pct !== null ? ` (${fmtPct(r.unreal_pct)})` : "";
       return `${fmtMoney(r.unreal_gain, currency)}${pct}`;
-    }};
+    }},
+  };
 
-  const middle = colOrder
-    .filter(id => optCols.has(id))
-    .map(id => OPT_DEFS[id])
-    .filter(Boolean);
-
-  return [ticker, ...middle, todayGain, unreal];
+  const tickerDef: ColDef = { key: "ticker", label: "代號", fmt: r => r.ticker };
+  const middle = colOrder.filter(id => optCols.has(id)).map(id => DEFS[id]).filter(Boolean);
+  return [tickerDef, ...middle];
 }
 
 function colorOf(val: number | null) {
@@ -147,8 +147,8 @@ function SortableColRow({ id, label, checked, onToggle }: {
 }
 
 export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
-  const [ss, setSS] = useState<SortState>({ col: null, dir: "desc" });
-  const [optCols, setOptCols]   = useState<Set<string>>(defaultOptCols());
+  const [ss, setSS]           = useState<SortState>({ col: null, dir: "desc" });
+  const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +167,8 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     return () => document.removeEventListener("mousedown", handler);
   }, [showPicker]);
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
   function toggleOptCol(id: string) {
     setOptCols(prev => {
       const next = new Set(prev);
@@ -176,35 +178,33 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     });
   }
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
   function handleColDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setColOrder(prev => {
-      const oldIdx = prev.indexOf(active.id as OptColId);
-      const newIdx = prev.indexOf(over.id as OptColId);
-      const next = arrayMove(prev, oldIdx, newIdx);
+      const next = arrayMove(prev, prev.indexOf(active.id as OptColId), prev.indexOf(over.id as OptColId));
       saveColOrder(next);
       return next;
     });
   }
 
-  const cols = buildCols(currency, optCols, colOrder);
+  const cols   = buildCols(currency, optCols, colOrder);
   const sorted = sortRows(rows, ss);
 
   function onHeaderClick(col: Col) {
+    if (col === "ticker") return; // ticker not sortable
     setSS(prev => {
-      if (prev.col !== col) return { col, dir: col === "ticker" ? "asc" : "desc" };
-      const initial = col === "ticker" ? "asc" : "desc";
-      if (prev.dir !== initial) return { col: null, dir: "desc" };
-      return { col, dir: initial === "asc" ? "desc" : "asc" };
+      if (prev.col !== col) return { col, dir: "desc" };
+      if (prev.dir === "desc") return { col, dir: "asc" };
+      return { col: null, dir: "desc" };
     });
   }
 
-  const totalToday = rows.reduce((s, r) => s + (r.today_gain ?? 0), 0);
+  const totalToday  = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const hasData = rows.some(r => r.price !== null);
+  const totalCost   = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const hasData     = rows.some(r => r.price !== null);
+  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis"].includes(c.key));
 
   return (
     <div>
@@ -216,7 +216,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
           <div style={{
             position: "absolute", top: "110%", right: 0, zIndex: 100,
             background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)",
-            borderRadius: 6, padding: "10px 14px", minWidth: 160,
+            borderRadius: 6, padding: "10px 14px", minWidth: 165,
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位（拖曳調順序）</div>
@@ -237,11 +237,19 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
         <table className="pnl-table">
           <thead>
             <tr>
-              {cols.map(c => (
-                <th key={c.key} className={ss.col === c.key ? "active" : ""} onClick={() => onHeaderClick(c.key)}>
-                  {c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}
-                </th>
-              ))}
+              {cols.map(c => {
+                const sortable = c.key !== "ticker";
+                return (
+                  <th
+                    key={c.key}
+                    className={ss.col === c.key ? "active" : ""}
+                    onClick={() => sortable && onHeaderClick(c.key)}
+                    style={{ cursor: sortable ? "pointer" : "default" }}
+                  >
+                    {c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -264,12 +272,16 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
               </tr>
             ))}
           </tbody>
-          {hasData && (
+          {showTfoot && (
             <tfoot>
               <tr>
-                <td colSpan={cols.length - 2} style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em" }}>合計</td>
-                <td className={colorOf(totalToday)}>{fmtMoney(totalToday, currency)}</td>
-                <td className={colorOf(totalUnreal)}>{fmtMoney(totalUnreal, currency)}</td>
+                {cols.map(c => {
+                  if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em" }}>合計</td>;
+                  if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)}>{fmtMoney(totalToday, currency)}</td>;
+                  if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)}>{fmtMoney(totalUnreal, currency)}</td>;
+                  if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)" }}>{fmtMoney(totalCost, currency)}</td>;
+                  return <td key={c.key} />;
+                })}
               </tr>
             </tfoot>
           )}
