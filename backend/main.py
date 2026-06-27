@@ -98,27 +98,73 @@ TW_NAMES: dict = {
 }
 
 
+# ── Schema migrations ─────────────────────────────────────────────────────────
+SCHEMA_VERSION = 3
+
+
+def _migrate_v1(data: dict) -> dict:
+    """Flat portfolio {TICKER: {shares, avg_cost}} → multi-account structure.
+    Also handles oldest format where entire file = group_tickers (no wrapper)."""
+    if "group_tickers" not in data and "portfolio" not in data:
+        data = {"group_tickers": {k: v for k, v in data.items() if isinstance(v, list)}}
+    portfolio = data.get("portfolio", {})
+    if portfolio:
+        first = next(iter(portfolio.values()), {})
+        if isinstance(first, dict) and "shares" in first:
+            data["portfolio"] = {
+                "美股複委託（台幣帳戶）": {"currency": "USD", "positions": portfolio},
+                "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
+                "台股帳戶":         {"currency": "TWD", "positions": {}},
+            }
+    return data
+
+
+def _migrate_v2(data: dict) -> dict:
+    """Rename group icons: 🚀 個股 → ⚡ 個股, ⚡ 槓桿型 → 🚀 槓桿型."""
+    raw = data.get("group_tickers", {})
+    pinned = data.get("pinned_groups", [])
+    for old, new in _ICON_MIGRATION.items():
+        if old in raw and new not in raw:
+            raw = {(new if k == old else k): v for k, v in raw.items()}
+    data["group_tickers"] = raw
+    data["pinned_groups"] = [_ICON_MIGRATION.get(p, p) for p in pinned]
+    return data
+
+
+def _migrate_v3(data: dict) -> dict:
+    """Add group_markets field; default all existing groups to 'US'."""
+    if "group_markets" not in data:
+        data["group_markets"] = {k: "US" for k in data.get("group_tickers", {})}
+    return data
+
+
+_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3}
+
+
+def run_migrations(data: dict) -> tuple[dict, bool]:
+    """Apply all pending migrations in order. Returns (migrated_data, changed)."""
+    current = data.get("schema_version", 0)
+    if current >= SCHEMA_VERSION:
+        return data, False
+    for v in range(current + 1, SCHEMA_VERSION + 1):
+        if v in _MIGRATIONS:
+            data = _MIGRATIONS[v](data)
+    data["schema_version"] = SCHEMA_VERSION
+    return data, True
+
+
 def load_config() -> tuple[dict, dict, list, dict]:
     try:
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
-        raw = data.get("group_tickers", data)
-        raw_portfolio = data.get("portfolio", {})
-        pinned = data.get("pinned_groups", list(_DEFAULT_PINNED))
-        # Migrate old icon names (🚀 個股 → ⚡ 個股, ⚡ 槓桿型 → 🚀 槓桿型)
-        needs_save = False
-        for old, new in _ICON_MIGRATION.items():
-            if old in raw and new not in raw:
-                raw = {(new if k == old else k): v for k, v in raw.items()}
-                needs_save = True
-        pinned = [_ICON_MIGRATION.get(p, p) for p in pinned]
-        if needs_save:
-            data["group_tickers"] = raw
-            data["pinned_groups"] = pinned
+        data, changed = run_migrations(data)
+        if changed:
             with _config_lock:
                 with open(CONFIG_FILE, "w") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
-        # Load all groups (defaults + any user-added)
+        raw = data.get("group_tickers", {})
+        raw_portfolio = data.get("portfolio", {})
+        pinned = data.get("pinned_groups", list(_DEFAULT_PINNED))
         groups: dict = {}
         for k, v in _DEFAULT_GROUPS.items():
             groups[k] = raw.get(k, list(v))
@@ -127,15 +173,6 @@ def load_config() -> tuple[dict, dict, list, dict]:
                 groups[k] = v
         raw_markets = data.get("group_markets", {})
         markets = {k: raw_markets.get(k, "US") for k in groups}
-        # Migrate old flat portfolio {"TICKER": {"shares":N, "avg_cost":X}}
-        if raw_portfolio and "美股複委託（台幣帳戶）" not in raw_portfolio:
-            first = next(iter(raw_portfolio.values()), {})
-            if isinstance(first, dict) and "shares" in first:
-                raw_portfolio = {
-                    "美股複委託（台幣帳戶）": {"currency": "USD", "positions": raw_portfolio},
-                    "美股複委託（美金帳戶）": {"currency": "USD", "positions": {}},
-                    "台股帳戶":         {"currency": "TWD", "positions": {}},
-                }
         return groups, raw_portfolio or _EMPTY_PORTFOLIO, pinned, markets
     except (FileNotFoundError, json.JSONDecodeError):
         return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, _EMPTY_PORTFOLIO, list(_DEFAULT_PINNED), {k: "US" for k in _DEFAULT_GROUPS}
