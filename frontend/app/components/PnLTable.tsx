@@ -277,14 +277,20 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
               <tr key={row.ticker}>
                 {cols.map(c => {
                   const val = row[c.key] as number | null;
-                  const needsColor = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
-                  const isHigh     = c.key === "day_high";
-                  const isLow      = c.key === "day_low";
-                  const isUserData = ["shares", "avg_cost", "cost_basis"].includes(c.key);
+                  const needsColor  = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
+                  const isHigh      = c.key === "day_high";
+                  const isLow       = c.key === "day_low";
+                  const isUserData  = ["shares", "avg_cost", "cost_basis"].includes(c.key);
+                  const isTodayGain = c.key === "today_gain";
+                  const cellStyle = isUserData ? { color: "var(--gold)" }
+                    : isHigh      ? { color: "#A78BFA" }
+                    : isLow       ? { color: "#5BB8D4" }
+                    : isTodayGain ? { fontWeight: 800, fontSize: "1rem" }
+                    : undefined;
                   return (
                     <td key={c.key}
                       className={needsColor ? colorOf(val) : ""}
-                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : undefined}
+                      style={cellStyle}
                     >
                       {c.key === "ticker" && row.name ? (
                         <div>
