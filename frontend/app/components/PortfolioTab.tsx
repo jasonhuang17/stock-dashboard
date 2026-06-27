@@ -231,17 +231,19 @@ function ManageTab({
           ◈ 新增持倉
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div>
+          <div style={{ position: "relative" }}>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
             <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
               value={ticker}
               onChange={e => { setTicker(e.target.value.toUpperCase()); setTickerStatus("idle"); setErr(""); }}
               onBlur={handleTickerBlur}
               onKeyDown={e => e.key === "Enter" && handleAdd()} />
-            {tickerStatus === "checking" && <div style={{ fontSize: "0.6rem", color: "var(--dim)", marginTop: 2 }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></div>}
-            {tickerStatus === "ok"       && <div style={{ fontSize: "0.6rem", color: "var(--teal)", marginTop: 2 }}>✓ 代號有效</div>}
-            {tickerStatus === "duplicate" && <div style={{ fontSize: "0.6rem", color: "var(--red)", marginTop: 2 }}>{ticker} 已存在，請用編輯更新</div>}
-            {tickerStatus === "notfound"  && <div style={{ fontSize: "0.6rem", color: "var(--red)", marginTop: 2 }}>找不到代號 {ticker}</div>}
+            <div style={{ position: "absolute", top: "100%", left: 0, paddingTop: 2, whiteSpace: "nowrap" }}>
+              {tickerStatus === "checking"  && <span style={{ fontSize: "0.6rem", color: "var(--dim)" }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></span>}
+              {tickerStatus === "ok"        && <span style={{ fontSize: "0.6rem", color: "var(--teal)" }}>✓ 代號有效</span>}
+              {tickerStatus === "duplicate" && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>{ticker} 已存在，請用編輯更新</span>}
+              {tickerStatus === "notfound"  && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>找不到代號 {ticker}</span>}
+            </div>
           </div>
           <div>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>股數</div>
