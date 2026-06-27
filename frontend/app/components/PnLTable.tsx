@@ -20,8 +20,8 @@ interface ColDef {
 }
 
 // Only ticker is always shown; everything else is optional
-const VIS_KEY   = "pnl-cols-v3";
-const ORDER_KEY = "pnl-cols-order-v2";
+const VIS_KEY   = "pnl-cols-v4";
+const ORDER_KEY = "pnl-cols-order-v3";
 
 type OptColId =
   | "shares" | "avg_cost" | "cost_basis" | "price"
@@ -38,7 +38,7 @@ const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
   { id: "day_low",     label: "每日最低",   defaultOn: false },
   { id: "volume",      label: "成交量",     defaultOn: false },
   { id: "per_share",   label: "單股漲跌",   defaultOn: true  },
-  { id: "pct",         label: "漲跌%",     defaultOn: true  },
+  { id: "pct",         label: "單股漲跌%",  defaultOn: true  },
   { id: "today_gain",  label: "今日損益",   defaultOn: true  },
   { id: "unreal_gain", label: "未實現損益", defaultOn: true  },
 ];
@@ -93,7 +93,7 @@ function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[
       if (r.per_share === null) return "—";
       return `${r.per_share >= 0 ? "+" : ""}${priceSym}${Math.abs(r.per_share).toFixed(d)}`;
     }},
-    pct:         { key: "pct",         label: "漲跌%",   fmt: r => r.pct !== null ? fmtPct(r.pct) : "—" },
+    pct:         { key: "pct",         label: "單股漲跌%", fmt: r => r.pct !== null ? fmtPct(r.pct) : "—" },
     today_gain:  { key: "today_gain",  label: `今日損益 (${sym})`,   fmt: r => r.today_gain  !== null ? fmtMoney(r.today_gain, currency)  : "—" },
     unreal_gain: { key: "unreal_gain", label: `未實現損益 (${sym})`, fmt: r => {
       if (r.unreal_gain === null) return "—";
