@@ -2,6 +2,10 @@
 
 美股與台股即時漲跌幅儀表板，深色科技風 UI，支援多帳戶持倉損益追蹤、多組股票、多種圖表，每 30 秒自動更新。
 
+**兩個版本，共用同一份 `config.json`：**
+- **Streamlit 版本**：`stock_dashboard.py`，單檔 Python，5 秒啟動
+- **JS 版本**：FastAPI backend + Next.js frontend，適合作為獨立 Web 應用
+
 ---
 
 ## 功能特色
@@ -10,8 +14,9 @@
 |------|------|
 | 💼 多帳戶持倉 | 複委託台幣戶、複委託美金戶、台股帳戶各自獨立管理 |
 | 📊 整體損益 | 美股兩帳戶分群顯示，合計總損益列；台股獨立顯示 |
-| 💰 今日損益 | 單股漲跌金額與%、今日損益、未實現損益 |
-| 📈 多種圖表 | 氣泡圖 / 瀑布圖 / 樹狀熱力圖 / 長條圖，可切換 |
+| 💰 今日損益 | 單股漲跌金額與%、今日損益、未實現損益；可選顯示最高/最低/成交量（JS 版本存 localStorage） |
+| 🌙 盤後損益 | JS 版本：帳戶今日損益下方可展開盤後/前損益 table（收盤價 / 盤後價 / 漲跌 / 損益） |
+| 📈 多種圖表 | 氣泡圖 / 瀑布圖（合計欄顯示金額） / 樹狀熱力圖 / 長條圖，可切換 |
 | 📋 Cards | 每支股票顯示現價與當日漲跌幅 |
 | 🥧 圓餅圖 | 依漲跌幅絕對值顯示各股佔比 |
 | 📊 長條圖 | 橫向以 0% 為中心延伸，正規化顯示 |
@@ -39,70 +44,77 @@
 
 ---
 
-## 安裝步驟
+## 安裝與啟動
 
-### macOS
+### Streamlit 版本（推薦，快速啟動）
 
-**1. 確認 Python 版本**
-
-```bash
-python3 --version
-```
-
-若尚未安裝 Python，請至 [python.org](https://www.python.org/downloads/) 下載，或使用 Homebrew：
+**macOS**
 
 ```bash
-brew install python
-```
-
-**2. 安裝相依套件**
-
-```bash
-pip3 install streamlit yfinance plotly pandas pytz streamlit-autorefresh streamlit-sortables
-```
-
-**3. 啟動儀表板**
-
-```bash
+pip3 install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
 cd ~/Desktop/stock-dashboard
 streamlit run stock_dashboard.py
 ```
 
----
-
-### Windows
-
-**1. 確認 Python 版本**
+**Windows**
 
 ```powershell
-python --version
-```
-
-若尚未安裝，請至 [python.org](https://www.python.org/downloads/) 下載，安裝時勾選 **「Add Python to PATH」**。
-
-**2. 安裝相依套件**
-
-```powershell
-pip install streamlit yfinance plotly pandas pytz streamlit-autorefresh streamlit-sortables
-```
-
-**3. 啟動儀表板**
-
-```powershell
+pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
 cd Desktop\stock-dashboard
 streamlit run stock_dashboard.py
 ```
 
+瀏覽器開啟 `http://localhost:8501`。
+
 ---
 
-## 建議：使用虛擬環境（選用）
+### JS 版本（FastAPI + Next.js）
+
+需要：Python 3.8+、Node.js 20+
+
+**1. 安裝 backend 相依套件**
+
+```bash
+cd ~/Desktop/stock-dashboard/backend
+pip3 install -r requirements.txt
+```
+
+**2. 安裝 frontend 相依套件**
+
+```bash
+cd ~/Desktop/stock-dashboard/frontend
+npm install
+```
+
+**3. 一鍵啟動兩個服務**
+
+```bash
+cd ~/Desktop/stock-dashboard
+./start-js.sh
+```
+
+或分開啟動：
+
+```bash
+# Terminal 1
+cd backend && uvicorn main:app --port 8000 --reload
+
+# Terminal 2
+cd frontend && npm run dev
+```
+
+瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。
+
+---
+
+## 建議：使用虛擬環境（Streamlit 版本，選用）
 
 **macOS**
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install streamlit yfinance plotly pandas pytz streamlit-autorefresh streamlit-sortables
+pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
 streamlit run stock_dashboard.py
 ```
 
@@ -111,7 +123,7 @@ streamlit run stock_dashboard.py
 ```powershell
 python -m venv venv
 venv\Scripts\activate
-pip install streamlit yfinance plotly pandas pytz streamlit-autorefresh streamlit-sortables
+pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
 streamlit run stock_dashboard.py
 ```
 
@@ -167,15 +179,38 @@ streamlit run stock_dashboard.py
 
 ## 相依套件
 
+### Streamlit 版本
+
 | 套件 | 用途 |
 |------|------|
-| `streamlit` | Web UI 框架 |
+| `streamlit` | Web UI 框架（含 `@st.fragment` 30 秒自動更新） |
 | `yfinance` | Yahoo Finance 資料抓取 |
 | `plotly` | 圓餅圖、長條圖、氣泡圖、瀑布圖、樹狀圖 |
 | `pandas` | 資料處理 |
 | `pytz` | 時區轉換（美東時間） |
-| `streamlit-autorefresh` | 每 30 秒自動重跑頁面 |
 | `streamlit-sortables` | 拖拉排序元件 |
+| `cachetools` | TTL Cache（for `_resolve_tw_ticker` 等函式） |
+
+### JS 版本 backend
+
+| 套件 | 用途 |
+|------|------|
+| `fastapi` | REST API 框架 |
+| `uvicorn` | ASGI server |
+| `yfinance` | Yahoo Finance 資料抓取 |
+| `pandas` | 資料處理 |
+| `pytz` | 時區轉換 |
+| `cachetools` | thread-safe TTL Cache |
+
+### JS 版本 frontend
+
+| 套件 | 用途 |
+|------|------|
+| `next` 15 | React App Router 框架 |
+| `typescript` | 型別安全 |
+| `tailwindcss` v4 | 樣式 |
+| `recharts` | 圖表（氣泡/瀑布/樹狀/長條） |
+| `@dnd-kit/*` | 拖拉排序 |
 
 ---
 
