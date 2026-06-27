@@ -257,6 +257,7 @@ _quotes_cache: TTLCache = TTLCache(maxsize=500, ttl=28)
 _premarket_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=300)
+_tw_name_cache: dict = {}  # permanent — ticker names don't change
 _cache_lock = threading.Lock()
 
 # ── Quote logging ─────────────────────────────────────────────────────────────
@@ -327,12 +328,25 @@ def _single_ticker_quote(ticker: str) -> dict:
             base["pct"]   = (float(price) - float(prev)) / float(prev) * 100
         # day_high / day_low / volume from history (fast_info day_high/low can lag)
         raw = t.history(period="2d", interval="1d", auto_adjust=False)
+        if raw.empty:
+            # Some ETFs (e.g. preferred-class TW ETFs) don't respond to Ticker.history();
+            # yf.download is more reliable as a fallback.
+            raw = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=False)
         if not raw.empty:
             for field, key in (("High", "day_high"), ("Low", "day_low"), ("Volume", "volume")):
                 if field in raw.columns:
                     s = raw[field].dropna()
                     if len(s) >= 1:
                         base[key] = float(s.iloc[-1])
+            # If fast_info gave no price, derive it from the last two Close bars.
+            if base["price"] is None and "Close" in raw.columns:
+                closes = raw["Close"].dropna()
+                if len(closes) >= 2:
+                    p, prev_p = float(closes.iloc[-1]), float(closes.iloc[-2])
+                    base["price"] = p
+                    base["pct"] = (p - prev_p) / prev_p * 100
+                elif len(closes) == 1:
+                    base["price"] = float(closes.iloc[-1])
     except Exception:
         pass
     return base
@@ -427,6 +441,23 @@ def _single_ticker_premarket(ticker: str) -> dict:
     except Exception:
         pass
     return base
+
+
+def _fetch_tw_name(bare: str, resolved: str) -> str:
+    """Return Chinese/display name for a TW ticker. TW_NAMES first, then yfinance info (cached)."""
+    if bare in TW_NAMES:
+        return TW_NAMES[bare]
+    with _cache_lock:
+        if bare in _tw_name_cache:
+            return _tw_name_cache[bare]
+    try:
+        info = yf.Ticker(resolved).info
+        name = (info.get("shortName") or info.get("longName") or "").strip()
+    except Exception:
+        name = ""
+    with _cache_lock:
+        _tw_name_cache[bare] = name
+    return name
 
 
 def _resolve_tw_ticker(bare: str) -> str:
@@ -630,11 +661,12 @@ def quotes(tickers: str, market: str = "US"):
         resolved = [_resolve_tw_ticker(t) for t in ticker_list]
         raw_rows = _fetch_quotes(tuple(resolved))
         resolved_to_bare = dict(zip(resolved, ticker_list))
+        resolved_map = dict(zip(ticker_list, resolved))  # bare → resolved
         result = []
         for r in raw_rows:
             bare = resolved_to_bare.get(r["ticker"], r["ticker"])
             row = {**{k: v for k, v in r.items() if k != "ticker"}, "ticker": bare}
-            name = TW_NAMES.get(bare, "")
+            name = _fetch_tw_name(bare, resolved_map.get(bare, bare))
             if name:
                 row["name"] = name
             result.append(row)
