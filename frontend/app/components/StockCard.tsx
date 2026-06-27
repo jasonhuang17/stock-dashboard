@@ -15,8 +15,13 @@ export function StockCard({ q }: { q: Quote }) {
   const cls = colorClass(q.pct);
   return (
     <div className="stock-card">
-      <div style={{ fontSize: "1rem", fontWeight: 800, color: "var(--teal)", letterSpacing: "0.18em", marginBottom: 6 }}>
-        {q.ticker}
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ fontSize: "1rem", fontWeight: 800, color: "var(--teal)", letterSpacing: "0.18em" }}>
+          {q.ticker}
+        </div>
+        {q.name && (
+          <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginTop: 2 }}>{q.name}</div>
+        )}
       </div>
       {q.price !== null ? (
         <>

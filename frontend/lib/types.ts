@@ -2,6 +2,7 @@ export interface Quote {
   ticker: string;
   price: number | null;
   pct: number | null;
+  name?: string;
 }
 
 export interface PremarketQuote extends Quote {

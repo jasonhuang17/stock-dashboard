@@ -630,7 +630,15 @@ def quotes(tickers: str, market: str = "US"):
         resolved = [_resolve_tw_ticker(t) for t in ticker_list]
         raw_rows = _fetch_quotes(tuple(resolved))
         resolved_to_bare = dict(zip(resolved, ticker_list))
-        return [{**{k: v for k, v in r.items() if k != "ticker"}, "ticker": resolved_to_bare.get(r["ticker"], r["ticker"])} for r in raw_rows]
+        result = []
+        for r in raw_rows:
+            bare = resolved_to_bare.get(r["ticker"], r["ticker"])
+            row = {**{k: v for k, v in r.items() if k != "ticker"}, "ticker": bare}
+            name = TW_NAMES.get(bare, "")
+            if name:
+                row["name"] = name
+            result.append(row)
+        return result
     return _fetch_quotes(tuple(ticker_list))
 
 
