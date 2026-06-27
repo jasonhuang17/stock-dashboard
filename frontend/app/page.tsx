@@ -153,6 +153,15 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Demo mode banner */}
+      {useMock && (
+        <div style={{ margin: "0 -2rem", padding: "5px 2rem", background: "rgba(237,209,112,0.10)", borderBottom: "1px solid rgba(237,209,112,0.35)", display: "flex", alignItems: "center", gap: 10, fontSize: "0.72rem", fontFamily: "Courier New", letterSpacing: "0.06em" }}>
+          <span style={{ color: "var(--gold)", fontWeight: 700 }}>⚡ DEMO MODE</span>
+          <span style={{ color: "rgba(237,209,112,0.55)" }}>— showing sample data, not your real portfolio</span>
+          <button onClick={handleToggleMock} style={{ marginLeft: "auto", color: "rgba(237,209,112,0.6)", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontFamily: "Courier New" }}>exit demo ×</button>
+        </div>
+      )}
+
       {/* Countdown */}
       <div style={{ fontSize: "0.7rem", color: "var(--teal)", letterSpacing: "0.06em", marginBottom: 2 }}>
         ↻&nbsp; next data update in {countdown}s · prices ~15s delayed (Yahoo Finance)
