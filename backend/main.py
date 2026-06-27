@@ -122,7 +122,7 @@ def load_config() -> tuple[dict, dict, list]:
         return {k: list(v) for k, v in _DEFAULT_GROUPS.items()}, _EMPTY_PORTFOLIO, list(_DEFAULT_PINNED)
 
 
-def save_config(group_tickers: dict, portfolio: dict, pinned: list | None = None) -> None:
+def save_config(group_tickers: dict, portfolio: dict, pinned: Optional[list] = None) -> None:
     with _config_lock:
         try:
             with open(CONFIG_FILE, "r") as f:
