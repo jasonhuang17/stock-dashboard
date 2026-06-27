@@ -54,7 +54,7 @@ CLAUDE.md                 # 本檔案（已 commit）
 
 ## 開發規範（必須遵守）
 
-1. **Commit 訊息一律英文**，不加 `Co-Authored-By: Claude`
+1. **Commit 訊息一律英文，且不得包含任何中文字、emoji 或非 ASCII 字元**，不加 `Co-Authored-By: Claude`
 2. **每次更新 code 必須同步更新 `README.md`**（功能說明、使用步驟）
 3. **每次 commit 必須在 `DEV_LOG.md` 的變更紀錄區補上條目**
 4. Git 作者統一使用 `jasonhuang17 <jasonh6208work@gmail.com>`（repo 已設定，不需額外設定）
