@@ -12,10 +12,11 @@ interface Props {
   groupName: string;
   tickers: string[];
   refreshKey: number;
+  useMock: boolean;
   onTickersChange: (tickers: string[]) => void;
 }
 
-export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Props) {
+export function GroupTab({ groupName, tickers, refreshKey, useMock, onTickersChange }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("cards");
 
   useEffect(() => {
@@ -126,12 +127,14 @@ export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Pr
           {displayQuotes.map(q => (
             <div key={q.ticker} style={{ position: "relative" }}>
               <StockCard q={q} />
-              <button
-                className="ticker-chip-remove"
-                style={{ position: "absolute", top: 8, right: 8, fontSize: "1.1rem" }}
-                onClick={() => handleRemove(q.ticker)}
-                title={`移除 ${q.ticker}`}
-              >×</button>
+              {!useMock && (
+                <button
+                  className="ticker-chip-remove"
+                  style={{ position: "absolute", top: 8, right: 8, fontSize: "1.1rem" }}
+                  onClick={() => handleRemove(q.ticker)}
+                  title={`移除 ${q.ticker}`}
+                >×</button>
+              )}
             </div>
           ))}
         </div>
@@ -162,22 +165,26 @@ export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Pr
           <option value="price_desc">價格 ↓</option>
         </select>
 
-        <button className="dash-btn dash-btn-sm" onClick={() => { setShowSort(s => !s); }}>
+        <button className="dash-btn dash-btn-sm"
+          disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+          onClick={() => { if (!useMock) setShowSort(s => !s); }}>
           {showSort ? "↕ 收起排序 ▲" : "↕ 調整順序 ▼"}
         </button>
 
-        <button className="dash-btn dash-btn-sm" onClick={() => setShowAdd(s => !s)}>
+        <button className="dash-btn dash-btn-sm"
+          disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+          onClick={() => { if (!useMock) setShowAdd(s => !s); }}>
           {showAdd ? "✕ 取消" : "+ 新增股票"}
         </button>
       </div>
 
-      {showSort && sortMode === "custom" && (
+      {!useMock && showSort && sortMode === "custom" && (
         <div style={{ marginTop: 10 }}>
           <SortableChips items={tickers} onReorder={handleReorder} />
         </div>
       )}
 
-      {showAdd && (
+      {!useMock && showAdd && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
           <input
             className="dash-input"

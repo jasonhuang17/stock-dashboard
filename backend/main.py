@@ -585,6 +585,11 @@ def get_groups():
     return _groups_response(groups, pinned)
 
 
+def _require_real_mode() -> None:
+    if load_settings().get("use_mock"):
+        raise HTTPException(403, "read-only in demo mode")
+
+
 class GroupBody(BaseModel):
     name: str
 
@@ -595,6 +600,7 @@ class OrderBody(BaseModel):
 
 @app.put("/api/groups/order")
 def reorder_groups(body: OrderBody):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     specified = [n for n in body.order if n in groups]
     new_groups = {n: groups[n] for n in specified}
@@ -607,6 +613,7 @@ def reorder_groups(body: OrderBody):
 
 @app.post("/api/groups")
 def create_group(body: GroupBody):
+    _require_real_mode()
     name = body.name.strip()
     if not name:
         raise HTTPException(400, "name required")
@@ -620,6 +627,7 @@ def create_group(body: GroupBody):
 
 @app.delete("/api/groups/{group_name}")
 def delete_group(group_name: str):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
@@ -632,6 +640,7 @@ def delete_group(group_name: str):
 
 @app.patch("/api/groups/{group_name}")
 def rename_group(group_name: str, body: GroupBody):
+    _require_real_mode()
     new_name = body.name.strip()
     if not new_name:
         raise HTTPException(400, "name required")
@@ -652,6 +661,7 @@ class TickerBody(BaseModel):
 
 @app.post("/api/groups/{group_name}/tickers")
 def add_group_ticker(group_name: str, body: TickerBody):
+    _require_real_mode()
     ticker = body.ticker.strip().upper()
     if not ticker:
         raise HTTPException(400, "ticker required")
@@ -666,6 +676,7 @@ def add_group_ticker(group_name: str, body: TickerBody):
 
 @app.delete("/api/groups/{group_name}/tickers/{ticker}")
 def remove_group_ticker(group_name: str, ticker: str):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
@@ -680,6 +691,7 @@ class OrderBody(BaseModel):
 
 @app.put("/api/groups/{group_name}/order")
 def reorder_group(group_name: str, body: OrderBody):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if group_name not in groups:
         raise HTTPException(404, "group not found")
@@ -726,6 +738,7 @@ def _build_position(shares: float, avg_cost: float, total_cost: Optional[float])
 
 @app.post("/api/portfolio/{account}/positions")
 def add_position(account: str, body: PositionBody):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
@@ -742,6 +755,7 @@ def add_position(account: str, body: PositionBody):
 
 @app.put("/api/portfolio/{account}/positions/{ticker}")
 def update_position(account: str, ticker: str, body: PositionBody):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
@@ -755,6 +769,7 @@ def update_position(account: str, ticker: str, body: PositionBody):
 
 @app.delete("/api/portfolio/{account}/positions/{ticker}")
 def delete_position(account: str, ticker: str):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")
@@ -768,6 +783,7 @@ def delete_position(account: str, ticker: str):
 
 @app.put("/api/portfolio/{account}/order")
 def reorder_portfolio(account: str, body: OrderBody):
+    _require_real_mode()
     groups, portfolio, pinned = load_config()
     if account not in portfolio:
         raise HTTPException(404, "account not found")

@@ -202,12 +202,12 @@ export default function Dashboard() {
           return (
             <div
               key={g}
-              draggable={!isRenaming}
-              onDragStart={() => { setDragIdx(i); setDragOverIdx(i); }}
-              onDragEnter={() => setDragOverIdx(i)}
-              onDragOver={e => e.preventDefault()}
+              draggable={!isRenaming && !useMock}
+              onDragStart={() => { if (useMock) return; setDragIdx(i); setDragOverIdx(i); }}
+              onDragEnter={() => { if (useMock) return; setDragOverIdx(i); }}
+              onDragOver={e => { if (!useMock) e.preventDefault(); }}
               onDrop={() => {
-                if (dragIdx === null || dragIdx === i) { setDragIdx(null); setDragOverIdx(null); return; }
+                if (useMock || dragIdx === null || dragIdx === i) { setDragIdx(null); setDragOverIdx(null); return; }
                 const newOrder = [...groupNames];
                 const [moved] = newOrder.splice(dragIdx, 1);
                 newOrder.splice(i, 0, moved);
@@ -230,7 +230,7 @@ export default function Dashboard() {
                     value={renameValue}
                     onChange={e => setRenameValue(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === "Enter") e.currentTarget.blur(); // single path via onBlur
+                      if (e.key === "Enter") e.currentTarget.blur();
                       if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); }
                     }}
                     onBlur={() => {
@@ -244,14 +244,14 @@ export default function Dashboard() {
                 <button
                   className={`tab-btn${isActive ? " active" : ""}`}
                   onClick={() => handleSetTab(tabIdx)}
-                  onDoubleClick={() => { setRenamingGroup(g); setRenameValue(g); }}
+                  onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
                   style={!isPinned ? { paddingRight: "1.5rem" } : undefined}
-                  title="Double-click to rename"
+                  title={useMock ? "exit demo to edit" : "double-click to rename"}
                 >
                   {g}
                 </button>
               )}
-              {!isPinned && !isRenaming && (
+              {!isPinned && !isRenaming && !useMock && (
                 <span
                   onClick={e => { e.stopPropagation(); handleDeleteGroup(g); }}
                   style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", fontSize: "0.65rem", color: "var(--dim)", cursor: "pointer", lineHeight: 1, padding: "2px 3px" }}
@@ -264,8 +264,10 @@ export default function Dashboard() {
 
         {/* Add group */}
         {!addingGroup ? (
-          <button className="tab-btn" onClick={() => setAddingGroup(true)}
-            style={{ padding: "4px 10px", fontSize: "0.88rem", color: "var(--teal)", lineHeight: 1 }}>+</button>
+          <button className="tab-btn" onClick={() => { if (!useMock) setAddingGroup(true); }}
+            disabled={useMock}
+            title={useMock ? "exit demo to edit" : undefined}
+            style={{ padding: "4px 10px", fontSize: "0.88rem", color: useMock ? "var(--dim)" : "var(--teal)", lineHeight: 1, cursor: useMock ? "not-allowed" : "pointer" }}>+</button>
         ) : (
           <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <input
@@ -283,7 +285,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tab content */}
-      {tab === 0 && <PortfolioTab refreshKey={refreshKey} />}
+      {tab === 0 && <PortfolioTab refreshKey={refreshKey} useMock={useMock} />}
       {groupNames.map((g, i) => (
         tab === i + 1 && (
           <GroupTab
@@ -291,6 +293,7 @@ export default function Dashboard() {
             groupName={g}
             tickers={groups[g] ?? []}
             refreshKey={refreshKey}
+            useMock={useMock}
             onTickersChange={tickers => setGroups(prev => ({ ...prev, [g]: tickers }))}
           />
         )

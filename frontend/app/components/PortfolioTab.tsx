@@ -145,12 +145,13 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
 // ── Manage tab (add / edit / delete / reorder) ────────────────────────────────
 function ManageTab({
   account, currency, positions,
-  onRefresh,
+  onRefresh, useMock,
 }: {
   account: string;
   currency: Currency;
   positions: Record<string, { shares: number; avg_cost: number; total_cost?: number }>;
   onRefresh: () => void;
+  useMock: boolean;
 }) {
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
@@ -231,45 +232,51 @@ function ManageTab({
         </div>
       )}
 
-      {/* Add form */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: "0.72rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>
-          ◈ 新增持倉
+      {/* Add form — hidden in demo mode */}
+      {useMock ? (
+        <div style={{ marginBottom: 24, fontSize: "0.72rem", color: "var(--dim)", letterSpacing: "0.06em" }}>
+          ◈ read-only in demo mode
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div style={{ position: "relative" }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
-            <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
-              value={ticker}
-              onChange={e => { setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, "")); setTickerStatus("idle"); setErr(""); }}
-              onBlur={handleTickerBlur}
-              onKeyDown={e => e.key === "Enter" && handleAdd()} />
-            <div style={{ position: "absolute", top: "100%", left: 0, paddingTop: 2, whiteSpace: "nowrap" }}>
-              {tickerStatus === "checking"  && <span style={{ fontSize: "0.6rem", color: "var(--dim)" }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></span>}
-              {tickerStatus === "ok"        && <span style={{ fontSize: "0.6rem", color: "var(--teal)" }}>✓ 代號有效</span>}
-              {tickerStatus === "duplicate" && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>{ticker} 已存在，請用編輯更新</span>}
-              {tickerStatus === "notfound"  && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>找不到代號 {ticker}</span>}
+      ) : (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: "0.72rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>
+            ◈ 新增持倉
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ position: "relative" }}>
+              <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
+              <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
+                value={ticker}
+                onChange={e => { setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, "")); setTickerStatus("idle"); setErr(""); }}
+                onBlur={handleTickerBlur}
+                onKeyDown={e => e.key === "Enter" && handleAdd()} />
+              <div style={{ position: "absolute", top: "100%", left: 0, paddingTop: 2, whiteSpace: "nowrap" }}>
+                {tickerStatus === "checking"  && <span style={{ fontSize: "0.6rem", color: "var(--dim)" }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></span>}
+                {tickerStatus === "ok"        && <span style={{ fontSize: "0.6rem", color: "var(--teal)" }}>✓ 代號有效</span>}
+                {tickerStatus === "duplicate" && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>{ticker} 已存在，請用編輯更新</span>}
+                {tickerStatus === "notfound"  && <span style={{ fontSize: "0.6rem", color: "var(--red)" }}>找不到代號 {ticker}</span>}
+              </div>
             </div>
+            <div>
+              <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>股數</div>
+              <input className="dash-input" style={{ width: 90 }} placeholder="100"
+                type="number" value={shares} onChange={e => setShares(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAdd()} />
+            </div>
+            <div>
+              <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>總成本 ({sym})</div>
+              <input className="dash-input" style={{ width: 120 }} placeholder="15000.00"
+                type="number" step="0.01" value={totalCost}
+                onChange={e => setTotalCost(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAdd()} />
+            </div>
+            <button className="dash-btn" onClick={handleAdd} disabled={adding} style={{ marginBottom: 0, alignSelf: "flex-end" }}>
+              {adding ? <span className="spinner" /> : "+ 新增"}
+            </button>
           </div>
-          <div>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>股數</div>
-            <input className="dash-input" style={{ width: 90 }} placeholder="100"
-              type="number" value={shares} onChange={e => setShares(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAdd()} />
-          </div>
-          <div>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>總成本 ({sym})</div>
-            <input className="dash-input" style={{ width: 120 }} placeholder="15000.00"
-              type="number" step="0.01" value={totalCost}
-              onChange={e => setTotalCost(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAdd()} />
-          </div>
-          <button className="dash-btn" onClick={handleAdd} disabled={adding} style={{ marginBottom: 0, alignSelf: "flex-end" }}>
-            {adding ? <span className="spinner" /> : "+ 新增"}
-          </button>
+          {err && <div style={{ color: "var(--red)", fontSize: "0.75rem", marginTop: 6 }}>{err}</div>}
         </div>
-        {err && <div style={{ color: "var(--red)", fontSize: "0.75rem", marginTop: 6 }}>{err}</div>}
-      </div>
+      )}
 
       {/* Positions list */}
       {tickers.length > 0 && (
@@ -325,12 +332,12 @@ function ManageTab({
                         <td>{displayTotalCost.toFixed(2)}</td>
                         <td style={{ textAlign: "left" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button className="dash-btn dash-btn-sm" onClick={() => {
-                              setEditTicker(t);
-                              setEditShares(String(pos.shares));
-                              setEditTotalCost(displayTotalCost.toFixed(2));
-                            }}>編輯</button>
-                            <button className="dash-btn dash-btn-sm dash-btn-danger" onClick={() => handleDelete(t)}>刪除</button>
+                            <button className="dash-btn dash-btn-sm"
+                              disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+                              onClick={() => { if (!useMock) { setEditTicker(t); setEditShares(String(pos.shares)); setEditTotalCost(displayTotalCost.toFixed(2)); } }}>編輯</button>
+                            <button className="dash-btn dash-btn-sm dash-btn-danger"
+                              disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+                              onClick={() => { if (!useMock) handleDelete(t); }}>刪除</button>
                           </div>
                         </td>
                       </>
@@ -346,10 +353,12 @@ function ManageTab({
       {/* Reorder */}
       {tickers.length > 1 && (
         <div style={{ marginTop: 16 }}>
-          <button className="dash-btn dash-btn-sm" onClick={() => setShowSort(s => !s)}>
+          <button className="dash-btn dash-btn-sm"
+            disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+            onClick={() => { if (!useMock) setShowSort(s => !s); }}>
             {showSort ? "↕ 收起排序 ▲" : "↕ 調整持倉順序 ▼"}
           </button>
-          {showSort && (
+          {!useMock && showSort && (
             <div style={{ marginTop: 8 }}>
               <SortableChips items={tickers} onReorder={handleReorder} />
             </div>
@@ -448,7 +457,7 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
 }
 
 // ── Main portfolio tab ────────────────────────────────────────────────────────
-export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
+export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useMock: boolean }) {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [acctTab, setAcctTab] = useState(0);
   const [pnlTab, setPnlTab] = useState(0);
@@ -524,6 +533,7 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
                 currency={acct.currency}
                 positions={portfolio[acct.key]?.positions ?? {}}
                 onRefresh={loadPortfolio}
+                useMock={useMock}
               />
             )}
           </div>
