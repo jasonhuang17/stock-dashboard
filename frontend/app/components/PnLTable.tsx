@@ -264,7 +264,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                   return (
                     <td key={c.key}
                       className={needsColor ? colorOf(val) : ""}
-                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#F0A835" } : isLow ? { color: "#5BB8D4" } : undefined}
+                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : undefined}
                     >
                       {c.key === "ticker" && row.name ? (
                         <div>
