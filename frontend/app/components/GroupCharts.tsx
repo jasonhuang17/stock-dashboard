@@ -1,12 +1,9 @@
 "use client";
-import { useState } from "react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, ReferenceLine, LabelList,
 } from "recharts";
 import type { Quote } from "@/lib/types";
-
-type View = "cards" | "pie" | "bar";
 
 const PALETTE = ["#1ECFD6","#EDD170","#C05640","#5BB8D4","#F0A835","#E8855A","#3A9BC1","#7EDDE4","#0D5C8C","#F5C842","#1AA5B0","#D4935A","#4DA8C8","#E8B86D","#B04030"];
 
@@ -97,22 +94,9 @@ export function GroupStats({ quotes }: { quotes: Quote[] }) {
   );
 }
 
-export function GroupCharts({ quotes }: { quotes: Quote[] }) {
-  const [view, setView] = useState<View>("cards");
-  const views: { key: View; label: string }[] = [
-    { key: "cards", label: "📋 Cards" },
-    { key: "pie",   label: "🥧 圓餅圖" },
-    { key: "bar",   label: "📊 長條圖" },
-  ];
+export function GroupCharts({ quotes, view }: { quotes: Quote[]; view: "pie" | "bar" }) {
   return (
     <div>
-      <div className="tab-bar" style={{ marginBottom: 12 }}>
-        {views.map(v => (
-          <button key={v.key} className={`tab-btn${view === v.key ? " active" : ""}`} onClick={() => setView(v.key)}>
-            {v.label}
-          </button>
-        ))}
-      </div>
       {view === "pie" && <DonutChart quotes={quotes} />}
       {view === "bar" && <NormalizedBar quotes={quotes} />}
     </div>

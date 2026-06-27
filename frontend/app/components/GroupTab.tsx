@@ -138,7 +138,7 @@ export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Pr
       )}
 
       {/* Charts */}
-      {(subTab === "pie" || subTab === "bar") && <GroupCharts quotes={quotes} />}
+      {(subTab === "pie" || subTab === "bar") && <GroupCharts quotes={quotes} view={subTab} />}
 
       {/* Premarket */}
       {subTab === "premarket" && (
