@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { PortfolioRow, SortState } from "@/lib/types";
 import { fmtMoney, fmtPct } from "@/lib/api";
 
@@ -169,11 +169,11 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
           }}>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位</div>
             {OPT_COLS.map((c, i) => (
-              <>
+              <React.Fragment key={c.id}>
                 {i > 0 && OPT_COLS[i - 1].defaultOn && !c.defaultOn && (
-                  <div key={`sep-${i}`} style={{ borderTop: "1px solid rgba(8,120,164,0.2)", margin: "6px 0" }} />
+                  <div style={{ borderTop: "1px solid rgba(8,120,164,0.2)", margin: "6px 0" }} />
                 )}
-                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
                   <input
                     type="checkbox"
                     checked={optCols.has(c.id)}
@@ -182,7 +182,7 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                   />
                   {c.label}
                 </label>
-              </>
+              </React.Fragment>
             ))}
           </div>
         )}
