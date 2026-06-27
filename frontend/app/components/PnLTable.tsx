@@ -258,8 +258,10 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                 {cols.map(c => {
                   const val = row[c.key] as number | null;
                   const needsColor = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
+                  const isHigh = c.key === "day_high";
+                  const isLow  = c.key === "day_low";
                   return (
-                    <td key={c.key} className={needsColor ? colorOf(val) : ""}>
+                    <td key={c.key} className={needsColor ? colorOf(val) : isHigh ? "pos" : isLow ? "neg" : ""}>
                       {c.key === "ticker" && row.name ? (
                         <div>
                           <div>{row.ticker}</div>
