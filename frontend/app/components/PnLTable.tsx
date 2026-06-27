@@ -126,7 +126,7 @@ function SortableColRow({ id, label, checked, onToggle }: {
   );
 }
 
-export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[]; currency: Currency; account?: string }) {
+export function PnLTable({ rows, currency, account = "", label }: { rows: PortfolioRow[]; currency: Currency; account?: string; label?: string }) {
   const [ss, setSS]           = useState<SortState>({ col: null, dir: "desc" });
   const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
@@ -218,7 +218,8 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, position: "relative" }} ref={pickerRef}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, position: "relative" }} ref={pickerRef}>
+        {label ? <span style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em" }}>{label}</span> : <span />}
         <button className="dash-btn dash-btn-sm" onClick={() => setShowPicker(s => !s)} style={{ fontSize: "0.7rem" }}>
           ⊞ 欄位
         </button>

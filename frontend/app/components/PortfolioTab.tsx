@@ -404,14 +404,12 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
           {sectionTitle("美股市場 (USD)")}
           {usdRowsTW.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 4 }}>美股複委託（台幣帳戶）</div>
-              <PnLTable rows={usdRowsTW} currency="USD" />
+              <PnLTable rows={usdRowsTW} currency="USD" label="美股複委託（台幣帳戶）" />
             </div>
           )}
           {usdRowsUS.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em", marginTop: 16, marginBottom: 4 }}>美股複委託（美金帳戶）</div>
-              <PnLTable rows={usdRowsUS} currency="USD" />
+            <div style={{ marginBottom: 16, marginTop: 16 }}>
+              <PnLTable rows={usdRowsUS} currency="USD" label="美股複委託（美金帳戶）" />
             </div>
           )}
           <div className="summary-bar" style={{ marginTop: 8 }}>
