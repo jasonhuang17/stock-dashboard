@@ -465,8 +465,8 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
   }, []);
 
   const ACCOUNTS: { key: string; label: string; currency: Currency }[] = [
-    { key: "美股複委託（台幣帳戶）", label: "🇹🇼 美股複委託（台幣帳戶）", currency: "USD" },
-    { key: "美股複委託（美金帳戶）", label: "💵 美股複委託（美金帳戶）", currency: "USD" },
+    { key: "美股複委託（台幣帳戶）", label: "🇺🇸 美股複委託（台幣帳戶）", currency: "USD" },
+    { key: "美股複委託（美金帳戶）", label: "🇺🇸 美股複委託（美金帳戶）", currency: "USD" },
     { key: "台股帳戶",         label: "🇹🇼 台股帳戶",        currency: "TWD" },
   ];
 
