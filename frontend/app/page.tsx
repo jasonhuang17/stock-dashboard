@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [status, setStatus] = useState<{ status: MarketStatus; time: string } | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [refreshKey, setRefreshKey] = useState(0);  // bump to force child re-fetch
+  const [scrolled, setScrolled] = useState(false);
   const cdRef = useRef(REFRESH_INTERVAL);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -45,6 +46,12 @@ export default function Dashboard() {
       }
     }, 1000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   function handleRefresh() {
@@ -75,7 +82,7 @@ export default function Dashboard() {
   return (
     <div style={{ padding: "0.5rem 2rem 2rem", maxWidth: "100%", minHeight: "100vh" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "8px 0 4px", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, margin: "0 -2rem", padding: "8px 2rem 4px", transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s", background: scrolled ? "#002040" : "#001d3a", borderBottom: scrolled ? "1px solid rgba(8,120,164,0.35)" : "1px solid transparent", boxShadow: scrolled ? "0 4px 16px rgba(0,0,0,0.35)" : "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span className="dash-title">◈ STOCK DASHBOARD</span>
           {status && (
