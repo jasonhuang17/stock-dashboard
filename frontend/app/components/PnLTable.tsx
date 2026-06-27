@@ -277,20 +277,14 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
               <tr key={row.ticker}>
                 {cols.map(c => {
                   const val = row[c.key] as number | null;
-                  const needsColor  = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
-                  const isHigh      = c.key === "day_high";
-                  const isLow       = c.key === "day_low";
-                  const isUserData  = ["shares", "avg_cost", "cost_basis"].includes(c.key);
-                  const isTodayGain = c.key === "today_gain";
-                  const cellStyle = isUserData ? { color: "var(--gold)" }
-                    : isHigh      ? { color: "#A78BFA" }
-                    : isLow       ? { color: "#5BB8D4" }
-                    : isTodayGain ? { fontWeight: 800, fontSize: "1rem" }
-                    : undefined;
+                  const needsColor = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
+                  const isHigh     = c.key === "day_high";
+                  const isLow      = c.key === "day_low";
+                  const isUserData = ["shares", "avg_cost", "cost_basis"].includes(c.key);
                   return (
                     <td key={c.key}
                       className={needsColor ? colorOf(val) : ""}
-                      style={cellStyle}
+                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : undefined}
                     >
                       {c.key === "ticker" && row.name ? (
                         <div>
@@ -320,9 +314,9 @@ export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[
           </tbody>
           {showTfoot && (
             <tfoot>
-              <tr>
+              <tr style={{ fontWeight: 700, fontSize: "0.95rem" }}>
                 {cols.map(c => {
-                  if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em" }}>合計</td>;
+                  if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400 }}>合計</td>;
                   if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)}>{fmtMoney(totalToday, currency)}</td>;
                   if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)}>{fmtMoney(totalUnreal, currency)}</td>;
                   if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)" }}>{fmtMoney(totalCost, currency)}</td>;
