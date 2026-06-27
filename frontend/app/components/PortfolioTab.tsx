@@ -57,9 +57,9 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
               <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
             </span>
           )}
-          <div>
+          <div style={{ borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
             <div className="summary-label">今日損益</div>
-            <div className={`summary-value ${totalToday >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalToday, currency)}</div>
+            <div className={`summary-value ${totalToday >= 0 ? "pos" : "neg"}`} style={{ fontSize: "1.15rem" }}>{fmtMoney(totalToday, currency)}</div>
           </div>
           {todayPct !== null && (
             <div>
