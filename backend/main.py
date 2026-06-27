@@ -8,7 +8,7 @@ import json
 import os
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 import pytz
 import yfinance as yf
 from cachetools import TTLCache
@@ -31,11 +31,14 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "us
 DEMO_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_data.json")
 
 _DEFAULT_GROUPS = {
-    "🚀 個股": ["AAOI", "ONDS", "MU", "SNDK", "SPCX", "TSLA", "NVDA", "TSM", "AAPL", "GOOG", "AMZN"],
-    "⚡ 槓桿型": ["AAOX", "ONDL", "MUU", "SNXX", "TSMX"],
+    "⚡ 個股": ["AAOI", "ONDS", "MU", "SNDK", "SPCX", "TSLA", "NVDA", "TSM", "AAPL", "GOOG", "AMZN"],
+    "🚀 槓桿型": ["AAOX", "ONDL", "MUU", "SNXX", "TSMX"],
     "🌐 大盤型": ["VOO", "SPY", "QQQ"],
 }
 _DEFAULT_PINNED = list(_DEFAULT_GROUPS.keys())
+
+# One-time migration: rename groups that used old icons
+_ICON_MIGRATION = {"🚀 個股": "⚡ 個股", "⚡ 槓桿型": "🚀 槓桿型"}
 
 _EMPTY_PORTFOLIO = {
     "美股複委託（台幣帳戶）": {"currency": "USD", "positions": {}},
@@ -102,6 +105,19 @@ def load_config() -> tuple[dict, dict, list]:
         raw = data.get("group_tickers", data)
         raw_portfolio = data.get("portfolio", {})
         pinned = data.get("pinned_groups", list(_DEFAULT_PINNED))
+        # Migrate old icon names (🚀 個股 → ⚡ 個股, ⚡ 槓桿型 → 🚀 槓桿型)
+        needs_save = False
+        for old, new in _ICON_MIGRATION.items():
+            if old in raw and new not in raw:
+                raw = {(new if k == old else k): v for k, v in raw.items()}
+                needs_save = True
+        pinned = [_ICON_MIGRATION.get(p, p) for p in pinned]
+        if needs_save:
+            data["group_tickers"] = raw
+            data["pinned_groups"] = pinned
+            with _config_lock:
+                with open(CONFIG_FILE, "w") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
         # Load all groups (defaults + any user-added)
         groups: dict = {}
         for k, v in _DEFAULT_GROUPS.items():
@@ -571,6 +587,22 @@ def get_groups():
 
 class GroupBody(BaseModel):
     name: str
+
+
+class OrderBody(BaseModel):
+    order: List[str]
+
+
+@app.put("/api/groups/order")
+def reorder_groups(body: OrderBody):
+    groups, portfolio, pinned = load_config()
+    specified = [n for n in body.order if n in groups]
+    new_groups = {n: groups[n] for n in specified}
+    for n, tickers in groups.items():
+        if n not in new_groups:
+            new_groups[n] = tickers
+    save_config(new_groups, portfolio, pinned)
+    return _groups_response(new_groups, pinned)
 
 
 @app.post("/api/groups")

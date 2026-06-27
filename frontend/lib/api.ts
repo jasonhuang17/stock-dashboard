@@ -66,6 +66,9 @@ export const api = {
   renameGroup: (name: string, newName: string) =>
     patch<{ groups: Groups; pinned: string[] }>(`/api/groups/${encodeURIComponent(name)}`, { name: newName }),
 
+  reorderGroups: (order: string[]) =>
+    put<{ groups: Groups; pinned: string[] }>("/api/groups/order", { order }),
+
   addGroupTicker: (group: string, ticker: string) =>
     post<{ tickers: string[] }>(`/api/groups/${encodeURIComponent(group)}/tickers`, { ticker }),
 

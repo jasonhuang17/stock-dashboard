@@ -21,6 +21,8 @@ export default function Dashboard() {
   const [newGroupName, setNewGroupName] = useState("");
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [status, setStatus]     = useState<{ status: MarketStatus; time: string } | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -114,6 +116,14 @@ export default function Dashboard() {
     setRenamingGroup(null);
   }
 
+  async function handleReorderGroups(newOrder: string[]) {
+    try {
+      const res = await api.reorderGroups(newOrder);
+      setGroups(res.groups);
+      setPinned(res.pinned);
+    } catch { /* silent */ }
+  }
+
   function handleRefresh() {
     cdRef.current = REFRESH_INTERVAL;
     setCountdown(REFRESH_INTERVAL);
@@ -187,8 +197,32 @@ export default function Dashboard() {
           const isActive = tab === tabIdx;
           const isPinned = pinned.includes(g);
           const isRenaming = renamingGroup === g;
+          const isDragging = dragIdx === i;
+          const isDropTarget = dragOverIdx === i && dragIdx !== i;
           return (
-            <div key={g} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <div
+              key={g}
+              draggable={!isRenaming}
+              onDragStart={() => { setDragIdx(i); setDragOverIdx(i); }}
+              onDragEnter={() => setDragOverIdx(i)}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => {
+                if (dragIdx === null || dragIdx === i) { setDragIdx(null); setDragOverIdx(null); return; }
+                const newOrder = [...groupNames];
+                const [moved] = newOrder.splice(dragIdx, 1);
+                newOrder.splice(i, 0, moved);
+                handleReorderGroups(newOrder);
+                setDragIdx(null);
+                setDragOverIdx(null);
+              }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+              style={{
+                position: "relative", display: "inline-flex", alignItems: "center",
+                opacity: isDragging ? 0.4 : 1,
+                borderLeft: isDropTarget ? "2px solid var(--teal)" : "2px solid transparent",
+                transition: "border-color 0.1s",
+              }}
+            >
               {isRenaming ? (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                   <input

@@ -1,7 +1,7 @@
 {
   "group_tickers": {
-    "🚀 個股": ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "NFLX", "AMD", "AVGO", "TSM", "QCOM", "MU", "INTC", "CRM", "ADBE", "ORCL", "SHOP", "UBER", "ABNB"],
-    "⚡ 槓桿型": ["TQQQ", "SQQQ", "UPRO", "SPXU", "SOXL", "SOXS", "TECL", "LABU", "FNGU", "CURE"],
+    "⚡ 個股": ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "NFLX", "AMD", "AVGO", "TSM", "QCOM", "MU", "INTC", "CRM", "ADBE", "ORCL", "SHOP", "UBER", "ABNB"],
+    "🚀 槓桿型": ["TQQQ", "SQQQ", "UPRO", "SPXU", "SOXL", "SOXS", "TECL", "LABU", "FNGU", "CURE"],
     "🌐 大盤型": ["VOO", "SPY", "QQQ", "IWM", "DIA", "VTI", "GLD", "TLT", "BND", "AGG"]
   },
   "portfolio": {
