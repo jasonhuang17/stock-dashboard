@@ -3,6 +3,7 @@ Stock Dashboard — FastAPI backend
 Shares config.json with the Streamlit app (read/write).
 Run: uvicorn main:app --reload --port 8000
 """
+import concurrent.futures
 import json
 import os
 import threading
@@ -185,8 +186,10 @@ def active_groups() -> dict:
 
 
 # ── Caches ────────────────────────────────────────────────────────────────────
-_quotes_cache: TTLCache = TTLCache(maxsize=200, ttl=28)
-_premarket_cache: TTLCache = TTLCache(maxsize=200, ttl=60)
+# Keyed by individual ticker string (not the whole request tuple) so that
+# different groups sharing a ticker reuse the same cached entry.
+_quotes_cache: TTLCache = TTLCache(maxsize=500, ttl=28)
+_premarket_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=300)
 _cache_lock = threading.Lock()
@@ -195,15 +198,16 @@ _cache_lock = threading.Lock()
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quote_log.jsonl")
 _log_lock = threading.Lock()
 
-def _log_quotes(kind: str, rows: list[dict], cached: bool = False) -> None:
-    """Append one JSONL entry with timestamp, kind, and per-ticker snapshot."""
+def _log_quotes(kind: str, rows: list[dict], n_fetched: int = 0) -> None:
+    """Append one JSONL entry with timestamp, kind, cache hit/miss counts."""
     et = pytz.timezone("America/New_York")
     entry = {
         "ts": datetime.now(et).strftime("%Y-%m-%d %H:%M:%S ET"),
-        "kind": kind,        # "quotes" | "premarket"
-        "cached": cached,
+        "kind": kind,
+        "n_total": len(rows),
+        "n_fetched": n_fetched,   # 0 = fully cached; >0 = had fresh fetches
         "rows": [
-            {k: v for k, v in r.items() if k != "volume"}  # skip volume to keep log compact
+            {k: v for k, v in r.items() if k != "volume"}
             for r in rows
         ],
     }
@@ -212,7 +216,7 @@ def _log_quotes(kind: str, rows: list[dict], cached: bool = False) -> None:
             with open(_LOG_FILE, "a") as f:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
-        pass  # never let logging break the API
+        pass
 
 
 # ── Market status ─────────────────────────────────────────────────────────────
@@ -259,39 +263,64 @@ def _single_ticker_quote(ticker: str) -> dict:
 def _fetch_quotes(tickers: tuple) -> list[dict]:
     if not tickers:
         return []
+
+    # Split into cached vs missing using per-ticker cache entries.
+    hit: dict[str, dict] = {}
+    miss: list[str] = []
     with _cache_lock:
-        if tickers in _quotes_cache:
-            cached = _quotes_cache[tickers]
-            _log_quotes("quotes", cached, cached=True)
-            return cached
+        for t in tickers:
+            if t in _quotes_cache:
+                hit[t] = _quotes_cache[t]
+            else:
+                miss.append(t)
 
-    # Fetch each ticker individually (sequential) — yfinance batch downloads are
-    # non-deterministic (same batch returns different pct on different calls), and
-    # yfinance is not thread-safe so parallel individual downloads also corrupt data.
-    out = [_single_ticker_quote(t) for t in tickers]
+    if miss:
+        # Each thread creates its own yf.Ticker instance — no shared state.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            future_map = {ex.submit(_single_ticker_quote, t): t for t in miss}
+            for f in concurrent.futures.as_completed(future_map):
+                t = future_map[f]
+                row = f.result()
+                hit[t] = row
+                if row.get("price") is not None:
+                    with _cache_lock:
+                        _quotes_cache[t] = row
 
-    if any(r["price"] is not None for r in out):
-        with _cache_lock:
-            _quotes_cache[tickers] = out
-    _log_quotes("quotes", out, cached=False)
+    out = [hit.get(t, {"ticker": t, "price": None, "pct": None,
+                       "day_high": None, "day_low": None, "volume": None})
+           for t in tickers]
+    _log_quotes("quotes", out, n_fetched=len(miss))
     return out
 
 
 def _fetch_premarket(tickers: tuple) -> list[dict]:
     if not tickers:
         return []
+
+    hit: dict[str, dict] = {}
+    miss: list[str] = []
     with _cache_lock:
-        if tickers in _premarket_cache:
-            cached = _premarket_cache[tickers]
-            _log_quotes("premarket", cached, cached=True)
-            return cached
+        for t in tickers:
+            if t in _premarket_cache:
+                hit[t] = _premarket_cache[t]
+            else:
+                miss.append(t)
 
-    out = [_single_ticker_premarket(t) for t in tickers]
+    if miss:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            future_map = {ex.submit(_single_ticker_premarket, t): t for t in miss}
+            for f in concurrent.futures.as_completed(future_map):
+                t = future_map[f]
+                row = f.result()
+                hit[t] = row
+                if row.get("prev_close") is not None:
+                    with _cache_lock:
+                        _premarket_cache[t] = row
 
-    if any(r["prev_close"] is not None for r in out):
-        with _cache_lock:
-            _premarket_cache[tickers] = out
-    _log_quotes("premarket", out, cached=False)
+    out = [hit.get(t, {"ticker": t, "price": None, "pct": None,
+                       "prev_close": None, "time": None})
+           for t in tickers]
+    _log_quotes("premarket", out, n_fetched=len(miss))
     return out
 
 
