@@ -82,6 +82,29 @@ _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=300)
 _cache_lock = threading.Lock()
 
+# ── Quote logging ─────────────────────────────────────────────────────────────
+_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quote_log.jsonl")
+_log_lock = threading.Lock()
+
+def _log_quotes(kind: str, rows: list[dict], cached: bool = False) -> None:
+    """Append one JSONL entry with timestamp, kind, and per-ticker snapshot."""
+    et = pytz.timezone("America/New_York")
+    entry = {
+        "ts": datetime.now(et).strftime("%Y-%m-%d %H:%M:%S ET"),
+        "kind": kind,        # "quotes" | "premarket"
+        "cached": cached,
+        "rows": [
+            {k: v for k, v in r.items() if k != "volume"}  # skip volume to keep log compact
+            for r in rows
+        ],
+    }
+    try:
+        with _log_lock:
+            with open(_LOG_FILE, "a") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # never let logging break the API
+
 
 # ── Market status ─────────────────────────────────────────────────────────────
 def _market_status() -> tuple[str, datetime]:
@@ -143,7 +166,9 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
         return []
     with _cache_lock:
         if tickers in _quotes_cache:
-            return _quotes_cache[tickers]
+            cached = _quotes_cache[tickers]
+            _log_quotes("quotes", cached, cached=True)
+            return cached
 
     try:
         raw = yf.download(
@@ -202,6 +227,7 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
     if any(r["price"] is not None for r in out) and data_fresh:
         with _cache_lock:
             _quotes_cache[tickers] = out
+    _log_quotes("quotes", out, cached=False)
     return out
 
 
@@ -210,7 +236,9 @@ def _fetch_premarket(tickers: tuple) -> list[dict]:
         return []
     with _cache_lock:
         if tickers in _premarket_cache:
-            return _premarket_cache[tickers]
+            cached = _premarket_cache[tickers]
+            _log_quotes("premarket", cached, cached=True)
+            return cached
 
     et = pytz.timezone("America/New_York")
     try:
@@ -261,6 +289,7 @@ def _fetch_premarket(tickers: tuple) -> list[dict]:
     if any(r["prev_close"] is not None for r in out) and pm_fresh:
         with _cache_lock:
             _premarket_cache[tickers] = out
+    _log_quotes("premarket", out, cached=False)
     return out
 
 

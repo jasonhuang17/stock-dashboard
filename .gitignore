@@ -3,3 +3,4 @@ DEV_LOG.md
 __pycache__/
 *.pyc
 .DS_Store
+backend/quote_log.jsonl
