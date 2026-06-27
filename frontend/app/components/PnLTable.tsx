@@ -2,6 +2,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { PortfolioRow, SortState } from "@/lib/types";
 import { fmtMoney, fmtPct } from "@/lib/api";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type Currency = "USD" | "TWD";
 type Col = keyof PortfolioRow;
@@ -117,6 +124,28 @@ function sortRows(rows: PortfolioRow[], ss: SortState): PortfolioRow[] {
   });
 }
 
+function SortableColRow({ id, label, checked, onToggle }: {
+  id: string; label: string; checked: boolean; onToggle: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}
+    >
+      <span {...attributes} {...listeners}
+        style={{ cursor: "grab", color: "var(--dim)", fontSize: 13, lineHeight: 1, userSelect: "none" }}>
+        ☰
+      </span>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
+        <input type="checkbox" checked={checked} onChange={() => onToggle(id)} style={{ accentColor: "var(--teal)" }} />
+        {label}
+      </label>
+    </div>
+  );
+}
+
 export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
   const [ss, setSS] = useState<SortState>({ col: null, dir: "desc" });
   const [optCols, setOptCols]   = useState<Set<string>>(defaultOptCols());
@@ -147,12 +176,15 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     });
   }
 
-  function moveCol(idx: number, dir: -1 | 1) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  function handleColDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setColOrder(prev => {
-      const next = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[idx], next[target]] = [next[target], next[idx]];
+      const oldIdx = prev.indexOf(active.id as OptColId);
+      const newIdx = prev.indexOf(over.id as OptColId);
+      const next = arrayMove(prev, oldIdx, newIdx);
       saveColOrder(next);
       return next;
     });
@@ -187,31 +219,16 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
             borderRadius: 6, padding: "10px 14px", minWidth: 160,
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位 (可調順序)</div>
-            {colOrder.map((id, i) => {
-              const meta = OPT_COLS.find(c => c.id === id);
-              if (!meta) return null;
-              return (
-                <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer", fontSize: "0.78rem", color: "var(--text)" }}>
-                    <input type="checkbox" checked={optCols.has(id)} onChange={() => toggleOptCol(id)} style={{ accentColor: "var(--teal)" }} />
-                    {meta.label}
-                  </label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    <button
-                      onClick={() => moveCol(i, -1)}
-                      disabled={i === 0}
-                      style={{ background: "none", border: "none", color: i === 0 ? "var(--dim)" : "var(--teal)", cursor: i === 0 ? "default" : "pointer", fontSize: 9, lineHeight: 1, padding: "1px 2px" }}
-                    >▲</button>
-                    <button
-                      onClick={() => moveCol(i, 1)}
-                      disabled={i === colOrder.length - 1}
-                      style={{ background: "none", border: "none", color: i === colOrder.length - 1 ? "var(--dim)" : "var(--teal)", cursor: i === colOrder.length - 1 ? "default" : "pointer", fontSize: 9, lineHeight: 1, padding: "1px 2px" }}
-                    >▼</button>
-                  </div>
-                </div>
-              );
-            })}
+            <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位（拖曳調順序）</div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
+              <SortableContext items={colOrder} strategy={verticalListSortingStrategy}>
+                {colOrder.map(id => {
+                  const meta = OPT_COLS.find(c => c.id === id);
+                  if (!meta) return null;
+                  return <SortableColRow key={id} id={id} label={meta.label} checked={optCols.has(id)} onToggle={toggleOptCol} />;
+                })}
+              </SortableContext>
+            </DndContext>
           </div>
         )}
       </div>
