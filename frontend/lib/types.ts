@@ -26,6 +26,10 @@ export interface PortfolioRow {
   day_high: number | null;
   day_low: number | null;
   volume: number | null;
+  week_high: number | null;
+  week_low: number | null;
+  ytd_gain: number | null;
+  ytd_pct: number | null;
 }
 
 export interface PremarketPortfolioRow {

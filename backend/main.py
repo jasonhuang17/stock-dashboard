@@ -212,6 +212,7 @@ _premarket_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 _tw_name_cache: dict = {}  # permanent — ticker names don't change
+_ytd_cache: TTLCache = TTLCache(maxsize=500, ttl=86400)   # 24h — year-start price
 _cache_lock = threading.Lock()
 
 # ── Quote logging ─────────────────────────────────────────────────────────────
@@ -271,7 +272,8 @@ def _single_ticker_quote(ticker: str) -> dict:
     """Fetch quote via fast_info (real-time endpoint) for price/pct/prev_close,
     and history() for day_high/day_low/volume."""
     base = {"ticker": ticker, "price": None, "pct": None,
-            "day_high": None, "day_low": None, "volume": None}
+            "day_high": None, "day_low": None, "volume": None,
+            "week_high": None, "week_low": None}
     try:
         t = yf.Ticker(ticker)
         fi = t.fast_info
@@ -280,6 +282,10 @@ def _single_ticker_quote(ticker: str) -> dict:
         if price and prev:
             base["price"] = float(price)
             base["pct"]   = (float(price) - float(prev)) / float(prev) * 100
+        yh = fi.get("yearHigh")
+        yl = fi.get("yearLow")
+        if yh: base["week_high"] = float(yh)
+        if yl: base["week_low"]  = float(yl)
         # day_high / day_low / volume from history (fast_info day_high/low can lag)
         raw = t.history(period="2d", interval="1d", auto_adjust=False)
         if raw.empty:
@@ -304,6 +310,27 @@ def _single_ticker_quote(ticker: str) -> dict:
     except Exception:
         pass
     return base
+
+
+def _fetch_ytd_start(ticker: str) -> "float | None":
+    """First trading-day Close of the current calendar year. Cached 24h."""
+    with _cache_lock:
+        if ticker in _ytd_cache:
+            return _ytd_cache[ticker]
+    result = None
+    try:
+        year = datetime.now().year
+        t = yf.Ticker(ticker)
+        df = t.history(start=f"{year}-01-01", end=f"{year}-01-15", auto_adjust=False)
+        if not df.empty and "Close" in df.columns:
+            closes = df["Close"].dropna()
+            if len(closes):
+                result = float(closes.iloc[0])
+    except Exception:
+        pass
+    with _cache_lock:
+        _ytd_cache[ticker] = result
+    return result
 
 
 def _fetch_quotes(tickers: tuple) -> list[dict]:
@@ -333,7 +360,8 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
                         _quotes_cache[t] = row
 
     out = [hit.get(t, {"ticker": t, "price": None, "pct": None,
-                       "day_high": None, "day_low": None, "volume": None})
+                       "day_high": None, "day_low": None, "volume": None,
+                       "week_high": None, "week_low": None})
            for t in tickers]
     _log_quotes("quotes", out, n_fetched=len(miss))
     return out
@@ -490,6 +518,17 @@ def _portfolio_rows(account: str) -> list[dict]:
         quotes = _fetch_quotes(tuple(positions.keys()))
         quote_map = {q["ticker"]: q for q in quotes}
 
+    # Fetch YTD start prices concurrently (24h cache, separate from quotes cache)
+    if is_twd:
+        ytd_lookup = {b: bare_to_full[b] for b in positions}   # bare -> full
+    else:
+        ytd_lookup = {t: t for t in positions}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ytd_lookup) or 1)) as ex:
+        ytd_futures = {ex.submit(_fetch_ytd_start, full): bare for bare, full in ytd_lookup.items()}
+        ytd_map: dict = {}
+        for f in concurrent.futures.as_completed(ytd_futures):
+            ytd_map[ytd_futures[f]] = f.result()
+
     rows = []
     for ticker, pos in positions.items():
         q = quote_map.get(ticker, {})
@@ -508,6 +547,12 @@ def _portfolio_rows(account: str) -> list[dict]:
         else:
             prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
         cost_basis = (total_cost if total_cost is not None else avg_cost * shares)
+        ytd_start = ytd_map.get(ticker)
+        if price is not None and ytd_start is not None and ytd_start > 0:
+            ytd_gain = (price - ytd_start) * shares
+            ytd_pct = (price - ytd_start) / ytd_start * 100
+        else:
+            ytd_gain = ytd_pct = None
         rows.append({
             "ticker": ticker, "name": TW_NAMES.get(ticker, "") if is_twd else "",
             "shares": shares, "avg_cost": avg_cost,
@@ -516,6 +561,8 @@ def _portfolio_rows(account: str) -> list[dict]:
             "unreal_gain": unreal_gain, "unreal_pct": unreal_pct,
             "cost_basis": cost_basis,
             "day_high": q.get("day_high"), "day_low": q.get("day_low"), "volume": q.get("volume"),
+            "week_high": q.get("week_high"), "week_low": q.get("week_low"),
+            "ytd_gain": ytd_gain, "ytd_pct": ytd_pct,
         })
     return rows
 

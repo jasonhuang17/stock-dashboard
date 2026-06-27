@@ -27,21 +27,27 @@ const SYNC_EVENT = "pnl-cols-sync";
 type OptColId =
   | "shares" | "avg_cost" | "cost_basis" | "price"
   | "day_high" | "day_low" | "volume"
+  | "week_high" | "week_low"
   | "per_share" | "pct"
-  | "today_gain" | "unreal_gain";
+  | "today_gain" | "unreal_gain"
+  | "ytd_gain" | "ytd_pct";
 
 const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
-  { id: "shares",      label: "股數",      defaultOn: true  },
-  { id: "avg_cost",    label: "單股成本",   defaultOn: true  },
-  { id: "cost_basis",  label: "總成本",     defaultOn: false },
-  { id: "price",       label: "現價",      defaultOn: true  },
-  { id: "day_high",    label: "每日最高",   defaultOn: false },
-  { id: "day_low",     label: "每日最低",   defaultOn: false },
-  { id: "volume",      label: "成交量",     defaultOn: false },
-  { id: "per_share",   label: "單股漲跌",   defaultOn: true  },
-  { id: "pct",         label: "單股漲跌%",  defaultOn: true  },
-  { id: "today_gain",  label: "今日損益",   defaultOn: true  },
-  { id: "unreal_gain", label: "未實現損益", defaultOn: true  },
+  { id: "shares",      label: "股數",        defaultOn: true  },
+  { id: "avg_cost",    label: "單股成本",     defaultOn: true  },
+  { id: "cost_basis",  label: "總成本",       defaultOn: false },
+  { id: "price",       label: "現價",        defaultOn: true  },
+  { id: "day_high",    label: "每日最高",     defaultOn: false },
+  { id: "day_low",     label: "每日最低",     defaultOn: false },
+  { id: "volume",      label: "成交量",       defaultOn: false },
+  { id: "week_high",   label: "52W 最高",    defaultOn: false },
+  { id: "week_low",    label: "52W 最低",    defaultOn: false },
+  { id: "per_share",   label: "單股漲跌",     defaultOn: true  },
+  { id: "pct",         label: "單股漲跌%",    defaultOn: true  },
+  { id: "today_gain",  label: "今日損益",     defaultOn: true  },
+  { id: "unreal_gain", label: "未實現損益",   defaultOn: true  },
+  { id: "ytd_gain",    label: "YTD 損益",    defaultOn: false },
+  { id: "ytd_pct",     label: "YTD 漲幅%",  defaultOn: false },
 ];
 
 const DEFAULT_ORDER = OPT_COLS.map(c => c.id);
@@ -80,6 +86,10 @@ function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[
       const pct = r.unreal_pct !== null ? ` (${fmtPct(r.unreal_pct)})` : "";
       return `${fmtMoney(r.unreal_gain, currency)}${pct}`;
     }},
+    week_high: { key: "week_high" as Col, label: "52W 最高", fmt: r => r.week_high !== null ? `${priceSym}${r.week_high.toFixed(2)}` : "—" },
+    week_low:  { key: "week_low"  as Col, label: "52W 最低", fmt: r => r.week_low  !== null ? `${priceSym}${r.week_low.toFixed(2)}`  : "—" },
+    ytd_gain:  { key: "ytd_gain"  as Col, label: `YTD 損益 (${sym})`,  fmt: r => r.ytd_gain !== null ? fmtMoney(r.ytd_gain, currency) : "—" },
+    ytd_pct:   { key: "ytd_pct"   as Col, label: "YTD 漲幅%",          fmt: r => r.ytd_pct  !== null ? fmtPct(r.ytd_pct) : "—" },
   };
 
   const tickerDef: ColDef = { key: "ticker", label: "代號", fmt: r => r.ticker };
@@ -213,8 +223,9 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const totalToday  = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
   const totalCost   = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const totalYtd    = rows.reduce((s, r) => s + (r.ytd_gain   ?? 0), 0);
   const hasData     = rows.some(r => r.price !== null);
-  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis"].includes(c.key));
+  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis", "ytd_gain"].includes(c.key));
 
   return (
     <div>
@@ -278,14 +289,16 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
               <tr key={row.ticker}>
                 {cols.map(c => {
                   const val = row[c.key] as number | null;
-                  const needsColor = ["per_share", "pct", "today_gain", "unreal_gain"].includes(c.key);
+                  const needsColor = ["per_share", "pct", "today_gain", "unreal_gain", "ytd_gain", "ytd_pct"].includes(c.key);
                   const isHigh     = c.key === "day_high";
                   const isLow      = c.key === "day_low";
+                  const isWeekHigh = c.key === "week_high";
+                  const isWeekLow  = c.key === "week_low";
                   const isUserData = ["shares", "avg_cost", "cost_basis"].includes(c.key);
                   return (
                     <td key={c.key}
                       className={needsColor ? colorOf(val) : ""}
-                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : undefined}
+                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : isWeekHigh ? { color: "#FB923C" } : isWeekLow ? { color: "#60A5FA" } : undefined}
                     >
                       {c.key === "ticker" && row.name ? (
                         <div>
@@ -321,6 +334,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                   if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)}>{fmtMoney(totalToday, currency)}</td>;
                   if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)}>{fmtMoney(totalUnreal, currency)}</td>;
                   if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)" }}>{fmtMoney(totalCost, currency)}</td>;
+                  if (c.key === "ytd_gain")    return <td key="ytd_gain"    className={colorOf(totalYtd)}>{fmtMoney(totalYtd, currency)}</td>;
                   return <td key={c.key} />;
                 })}
               </tr>
