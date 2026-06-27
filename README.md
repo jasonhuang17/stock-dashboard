@@ -117,11 +117,11 @@ cd frontend && npm run dev
 **macOS / Linux（Terminal）**
 
 ```bash
-# 清掉 backend（:8000）和 frontend（:3000）
-lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9
+# 清掉舊 process 並直接重啟（一行搞定）
+lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9 2>/dev/null; ./start-js.sh
 
-# 只清 backend
-lsof -ti tcp:8000 | xargs kill -9
+# 只清 process，不重啟
+lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9
 ```
 
 **Windows（Command Prompt）**
