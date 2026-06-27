@@ -81,7 +81,7 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
           </div>
         </div>
       )}
-      <PnLTable rows={rows} currency={currency} />
+      <PnLTable rows={rows} currency={currency} account={account} />
       <PnLChart rows={rows} currency={currency} />
 
       {/* After-hours / pre-market section */}

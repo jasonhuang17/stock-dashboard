@@ -19,6 +19,9 @@ interface ColDef {
   fmt: (row: PortfolioRow) => string;
 }
 
+const ALL_ACCOUNTS = ["複委託（台幣戶）", "複委託（美金戶）", "台股帳戶"];
+const SYNC_EVENT = "pnl-cols-sync";
+
 // Only ticker is always shown; everything else is optional
 
 type OptColId =
@@ -123,7 +126,7 @@ function SortableColRow({ id, label, checked, onToggle }: {
   );
 }
 
-export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: Currency }) {
+export function PnLTable({ rows, currency, account = "" }: { rows: PortfolioRow[]; currency: Currency; account?: string }) {
   const [ss, setSS]           = useState<SortState>({ col: null, dir: "desc" });
   const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
@@ -132,10 +135,27 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
 
   useEffect(() => {
     api.getSettings().then(s => {
-      if (s.col_vis)   setOptCols(new Set(s.col_vis));
-      if (s.col_order) setColOrder(mergeOrder(s.col_order));
-    }).catch(() => { /* keep defaults */ });
-  }, []);
+      const acct = s.pnl_cols?.[account];
+      if (acct) {
+        setOptCols(new Set(acct.vis));
+        setColOrder(mergeOrder(acct.order));
+      } else if (s.col_vis || s.col_order) {
+        // migrate from old flat format
+        if (s.col_vis)   setOptCols(new Set(s.col_vis));
+        if (s.col_order) setColOrder(mergeOrder(s.col_order));
+      }
+    }).catch(() => {});
+
+    // Listen for "apply to all" broadcasts from other tabs
+    function onSync(e: Event) {
+      const { vis, order } = (e as CustomEvent<{ vis: string[]; order: string[] }>).detail;
+      setOptCols(new Set(vis));
+      setColOrder(mergeOrder(order));
+    }
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
 
   useEffect(() => {
     if (!showPicker) return;
@@ -148,11 +168,15 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
+  function savePrefs(vis: Set<string>, order: OptColId[]) {
+    api.setSettings({ pnl_cols: { [account]: { vis: [...vis], order } } }).catch(() => {});
+  }
+
   function toggleOptCol(id: string) {
     setOptCols(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      api.setSettings({ col_vis: [...next] }).catch(() => {});
+      savePrefs(next, colOrder);
       return next;
     });
   }
@@ -162,9 +186,17 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
     if (!over || active.id === over.id) return;
     setColOrder(prev => {
       const next = arrayMove(prev, prev.indexOf(active.id as OptColId), prev.indexOf(over.id as OptColId));
-      api.setSettings({ col_order: next }).catch(() => {});
+      savePrefs(optCols, next);
       return next;
     });
+  }
+
+  function applyToAll() {
+    const vis = [...optCols];
+    const order = colOrder;
+    const pnl_cols = Object.fromEntries(ALL_ACCOUNTS.map(a => [a, { vis, order }]));
+    api.setSettings({ pnl_cols }).catch(() => {});
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { vis, order } }));
   }
 
   const cols   = buildCols(currency, optCols, colOrder);
@@ -208,6 +240,15 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                 })}
               </SortableContext>
             </DndContext>
+            <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8 }}>
+              <button
+                className="dash-btn dash-btn-sm"
+                onClick={applyToAll}
+                style={{ width: "100%", fontSize: "0.65rem" }}
+              >
+                套用至全部帳戶
+              </button>
+            </div>
           </div>
         )}
       </div>
