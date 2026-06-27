@@ -14,7 +14,10 @@ function statusClass(s: MarketStatus) {
 }
 
 export default function Dashboard() {
-  const [tab, setTab] = useState(0);           // 0 = 持倉, 1+ = groups
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    return parseInt(sessionStorage.getItem("dashboard-tab") ?? "0", 10) || 0;
+  });
   const [groups, setGroups] = useState<Groups>({});
   const [status, setStatus] = useState<{ status: MarketStatus; time: string } | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
@@ -57,6 +60,15 @@ export default function Dashboard() {
   const groupNames = Object.keys(groups);
   const tabs = ["💼 持倉", ...groupNames];
 
+  // Clamp tab to valid range after groups load; save on every change
+  function handleSetTab(i: number) {
+    setTab(i);
+    sessionStorage.setItem("dashboard-tab", String(i));
+  }
+  useEffect(() => {
+    if (tab >= tabs.length && tabs.length > 0) handleSetTab(0);
+  }, [tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ padding: "0.5rem 2rem 2rem", maxWidth: "100%", minHeight: "100vh" }}>
       {/* Header */}
@@ -82,7 +94,7 @@ export default function Dashboard() {
       {/* Main tabs */}
       <div className="tab-bar">
         {tabs.map((t, i) => (
-          <button key={t} className={`tab-btn${tab === i ? " active" : ""}`} onClick={() => setTab(i)}>
+          <button key={t} className={`tab-btn${tab === i ? " active" : ""}`} onClick={() => handleSetTab(i)}>
             {t}
           </button>
         ))}
