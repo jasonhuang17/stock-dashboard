@@ -17,6 +17,11 @@ interface Props {
 
 export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("cards");
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`group-subtab-${groupName}`) as SubTab | null;
+    if (saved) setSubTab(saved);
+  }, [groupName]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [premarket, setPremarket] = useState<PremarketQuote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +111,7 @@ export function GroupTab({ groupName, tickers, refreshKey, onTickersChange }: Pr
       {/* Sub-tabs */}
       <div className="tab-bar">
         {subTabs.map(s => (
-          <button key={s.key} className={`tab-btn${subTab === s.key ? " active" : ""}`} onClick={() => setSubTab(s.key)}>
+          <button key={s.key} className={`tab-btn${subTab === s.key ? " active" : ""}`} onClick={() => { setSubTab(s.key); sessionStorage.setItem(`group-subtab-${groupName}`, s.key); }}>
             {s.label}
           </button>
         ))}

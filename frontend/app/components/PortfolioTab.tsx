@@ -388,7 +388,11 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => {
     const a = parseInt(sessionStorage.getItem("portfolio-acct-tab") ?? "0", 10) || 0;
-    if (a > 0) setAcctTab(a);
+    if (a > 0) {
+      setAcctTab(a);
+      const p = parseInt(sessionStorage.getItem(`portfolio-pnl-tab-${a}`) ?? "0", 10) || 0;
+      if (p > 0) setPnlTab(p);
+    }
   }, []);
 
   const ACCOUNTS: { key: string; label: string; currency: Currency }[] = [
@@ -414,7 +418,11 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
       {/* Account tabs */}
       <div className="tab-bar">
         {acctTabs.map((a, i) => (
-          <button key={a.key} className={`tab-btn${acctTab === i ? " active" : ""}`} onClick={() => { setAcctTab(i); setPnlTab(0); sessionStorage.setItem("portfolio-acct-tab", String(i)); }}>
+          <button key={a.key} className={`tab-btn${acctTab === i ? " active" : ""}`} onClick={() => {
+              const p = parseInt(sessionStorage.getItem(`portfolio-pnl-tab-${i}`) ?? "0", 10) || 0;
+              setAcctTab(i); setPnlTab(p);
+              sessionStorage.setItem("portfolio-acct-tab", String(i));
+            }}>
             {a.label}
           </button>
         ))}
@@ -426,7 +434,10 @@ export function PortfolioTab({ refreshKey }: { refreshKey: number }) {
         <div>
           <div className="tab-bar">
             {pnlSubTabs.map((t, i) => (
-              <button key={t} className={`tab-btn${pnlTab === i ? " active" : ""}`} onClick={() => setPnlTab(i)}>
+              <button key={t} className={`tab-btn${pnlTab === i ? " active" : ""}`} onClick={() => {
+                  setPnlTab(i);
+                  sessionStorage.setItem(`portfolio-pnl-tab-${acctTab}`, String(i));
+                }}>
                 {t}
               </button>
             ))}
