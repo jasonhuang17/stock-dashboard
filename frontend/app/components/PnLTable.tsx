@@ -263,8 +263,8 @@ export function PnLTable({ rows, currency }: { rows: PortfolioRow[]; currency: C
                   const isUserData = ["shares", "avg_cost", "cost_basis"].includes(c.key);
                   return (
                     <td key={c.key}
-                      className={needsColor ? colorOf(val) : isHigh ? "pos" : isLow ? "neg" : ""}
-                      style={isUserData ? { color: "var(--gold)" } : undefined}
+                      className={needsColor ? colorOf(val) : ""}
+                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#F0A835" } : isLow ? { color: "#5BB8D4" } : undefined}
                     >
                       {c.key === "ticker" && row.name ? (
                         <div>
