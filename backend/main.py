@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from tw_names import TW_NAMES
+from tw_exchange import TW_EXCHANGE
 
 app = FastAPI(title="Stock Dashboard API", version="1.0.0")
 
@@ -209,7 +210,7 @@ def active_groups() -> dict:
 _quotes_cache: TTLCache = TTLCache(maxsize=500, ttl=28)
 _premarket_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
-_tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=300)
+_tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 _tw_name_cache: dict = {}  # permanent — ticker names don't change
 _cache_lock = threading.Lock()
 
@@ -414,12 +415,16 @@ def _fetch_tw_name(bare: str, resolved: str) -> str:
 
 
 def _resolve_tw_ticker(bare: str) -> str:
+    # Fast path: static exchange lookup (covers 2340 listed/OTC stocks)
+    if bare in TW_EXCHANGE:
+        return bare + TW_EXCHANGE[bare]
+    # Fallback for unlisted/new codes: try download (cached to avoid repeat hits)
     with _cache_lock:
         if bare in _tw_resolve_cache:
             return _tw_resolve_cache[bare]
     for suffix in (".TW", ".TWO"):
         try:
-            df = yf.download(bare + suffix, period="2d", interval="1d", progress=False)
+            df = yf.download(bare + suffix, period="5d", interval="1d", progress=False)
             if not df.empty:
                 result = bare + suffix
                 with _cache_lock:
@@ -448,6 +453,9 @@ def _ticker_exists(ticker: str) -> bool:
 
 
 def _ticker_exists_tw(bare: str) -> bool:
+    # If it's in our static exchange table, we know it's valid
+    if bare in TW_EXCHANGE:
+        return True
     key = f"tw:{bare}"
     with _cache_lock:
         if key in _exists_cache:
@@ -455,7 +463,7 @@ def _ticker_exists_tw(bare: str) -> bool:
     result = False
     for suffix in (".TW", ".TWO"):
         try:
-            df = yf.download(bare + suffix, period="2d", interval="1d", progress=False)
+            df = yf.download(bare + suffix, period="5d", interval="1d", progress=False)
             if not df.empty:
                 result = True
                 break
