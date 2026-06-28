@@ -1155,10 +1155,10 @@ _trading_days_lock = threading.Lock()
 PERIOD_MAP = {
     "intra": ("1d",  "1m"),   # regular session only (no pre/post)
     "1d":    ("1d",  "1m"),   # full day including pre/post
-    "2d":    (None,  "1m"),   # last 2 trading days, 1m, prepost — fetched dynamically
-    "3d":    (None,  "1m"),
-    "4d":    (None,  "1m"),
-    "5d":    (None,  "1m"),
+    "2d":    (None,  "15m"),  # last N trading days, 15m, prepost — fetched dynamically
+    "3d":    (None,  "15m"),
+    "4d":    (None,  "15m"),
+    "5d":    (None,  "15m"),
     "1w":    ("5d",  "15m"),
     "1m":    ("1mo", "1d"),
     "3m":    ("3mo", "1d"),
@@ -1218,8 +1218,7 @@ def get_history(ticker: str, period: str = "1y", date: Optional[str] = None):
                              interval="1m", progress=False, auto_adjust=True, prepost=False)
         elif period in ("2d", "3d", "4d", "5d"):
             n = int(period[0])
-            # yfinance 1m data is limited to ~7 calendar days; fetch 5d then trim
-            df_full = yf.download(fetch_ticker, period="5d", interval="1m",
+            df_full = yf.download(fetch_ticker, period="5d", interval="15m",
                                   progress=False, auto_adjust=True, prepost=True)
             if df_full.empty:
                 return []

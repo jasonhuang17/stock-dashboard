@@ -251,7 +251,7 @@ export default function StockPage() {
           {bars.some(b => b.v !== null) && (
             <ResponsiveContainer width="100%" height={80}>
               <ComposedChart data={chartData} margin={{ top: 0, right: 16, bottom: 8, left: 8 }}>
-                <XAxis dataKey="t" hide />
+                <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
                 <YAxis tick={{ fill: "#6899b8", fontSize: 9 }} width={60}
                   tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)} />
                 <Tooltip
