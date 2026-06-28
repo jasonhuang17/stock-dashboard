@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -67,25 +67,23 @@ export default function StockPage() {
     }).catch(() => {});
   }, [period, ticker]);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (period === "intra" && !selectedDate) return;
+    let cancelled = false;
     setLoading(true);
-    try {
-      const result = await api.history(ticker, period, period === "intra" ? selectedDate : undefined);
-      if (result && typeof result === "object" && "bars" in result) {
-        setData({
-          bars: result.bars,
-          interval: result.interval,
-          session_boundaries: result.session_boundaries,
-        });
-      } else {
-        setData({ bars: [], interval: "1d" });
-      }
-    } catch { setData({ bars: [], interval: "1d" }); }
-    setLoading(false);
+    api.history(ticker, period, period === "intra" ? selectedDate : undefined)
+      .then(result => {
+        if (cancelled) return;
+        if (result && typeof result === "object" && "bars" in result) {
+          setData({ bars: result.bars, interval: result.interval, session_boundaries: result.session_boundaries });
+        } else {
+          setData({ bars: [], interval: "1d" });
+        }
+      })
+      .catch(() => { if (!cancelled) setData({ bars: [], interval: "1d" }); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [ticker, period, selectedDate]);
-
-  useEffect(() => { load(); }, [load]);
 
   const bars = data?.bars ?? [];
   const interval = data?.interval ?? "1d";
