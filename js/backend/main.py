@@ -216,14 +216,17 @@ _tw_name_cache: dict = {}  # permanent — ticker names don't change
 _ytd_cache: TTLCache = TTLCache(maxsize=500, ttl=86400)   # 24h — year-start price
 _52w_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)    # 1h — 52-week high/low (background-populated)
 _cache_lock = threading.Lock()
+# Limits concurrent yf.download calls to 1 to prevent Yahoo Finance rate-limiting
+# when all portfolio accounts load simultaneously on fresh backend start.
+_yf_semaphore = threading.Semaphore(1)
 
 # ── Quote / portfolio logging ──────────────────────────────────────────────────
 _LOG_FILE       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quote_log.jsonl")
 _PORTFOLIO_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_log.jsonl")
 _log_lock = threading.Lock()
 
-def _log_portfolio(account: str, currency: str, rows: list[dict],
-                   tw_resolved: dict | None = None, stale_tickers: list | None = None) -> None:
+def _log_portfolio(account: str, currency: str, rows: list,
+                   tw_resolved=None, stale_tickers=None) -> None:
     """Append one entry to portfolio_log.jsonl recording which fields were null and why."""
     et = pytz.timezone("America/New_York")
     null_price  = [r["ticker"] for r in rows if r.get("price")     is None]
@@ -305,7 +308,8 @@ def _fetch_52w_batch(tickers: list) -> None:
         return
     try:
         dl_arg = tickers[0] if len(tickers) == 1 else tickers
-        df = yf.download(dl_arg, period="1y", interval="1d", progress=False, auto_adjust=False)
+        with _yf_semaphore:
+            df = yf.download(dl_arg, period="1y", interval="1d", progress=False, auto_adjust=False)
         if df.empty:
             return
         is_multi = hasattr(df.columns, "levels")
@@ -349,7 +353,8 @@ def _fetch_ytd_batch(tickers: list) -> dict:
             break
         try:
             dl_arg = remaining[0] if len(remaining) == 1 else remaining
-            df = yf.download(dl_arg, progress=False, auto_adjust=False, **kwargs)
+            with _yf_semaphore:
+                df = yf.download(dl_arg, progress=False, auto_adjust=False, **kwargs)
             if not df.empty:
                 is_multi = hasattr(df.columns, "levels")
                 for t in remaining:
@@ -396,7 +401,8 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
                             "week_high": None, "week_low": None}
         try:
             dl_arg = miss[0] if len(miss) == 1 else miss
-            df = yf.download(dl_arg, period="5d", interval="1d", progress=False, auto_adjust=False)
+            with _yf_semaphore:
+                df = yf.download(dl_arg, period="5d", interval="1d", progress=False, auto_adjust=False)
             is_multi = (not df.empty) and hasattr(df.columns, "levels")
             for t in miss:
                 row = _empty(t)
