@@ -31,11 +31,11 @@
 | ↻ 自動更新 | 每 30 秒重新抓取，倒數秒數即時顯示 |
 | 台灣慣例 | 紅色 = 上漲，綠色 = 下跌 |
 
-**預設股票分組**
+**預設股票分組（Demo 模式）**
 
-- ⚡ 個股：AAOI、ONDS、MU、SNDK、SPCX、TSLA、NVDA、TSM、AAPL、GOOG、AMZN
-- 🚀 槓桿型：AAOX、ONDL、MUU、TSMX
-- 🌐 大盤型：VOO、SPY、QQQ
+- ⚡ 個股：AAPL、MSFT、NVDA、TSLA、AMZN、GOOGL、META、NFLX、AMD、AVGO、TSM、QCOM、MU、INTC、CRM、ADBE、ORCL、SHOP、UBER、ABNB
+- 🚀 槓桿型：TQQQ、SQQQ、UPRO、SPXU、SOXL、SOXS、TECL、LABU、FNGU、CURE
+- 🌐 大盤型：VOO、SPY、QQQ、IWM、DIA、VTI、GLD、TLT、BND、AGG
 
 > 資料來源：Yahoo Finance（日線約延遲 15 秒；盤前/後使用 1 分鐘線）
 
