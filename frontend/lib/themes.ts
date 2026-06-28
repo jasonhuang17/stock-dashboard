@@ -76,8 +76,10 @@ export function applyTheme(theme: ColorTheme) {
   root.style.setProperty("--blue",        c.blue);
   root.style.setProperty("--teal",        c.teal);
   root.style.setProperty("--gold",        c.gold);
-  root.style.setProperty("--card-bg",     hexToRgba(c.blue, 0.35));
-  root.style.setProperty("--card-border", hexToRgba(c.blue, 0.50));
+  root.style.setProperty("--card-bg",       hexToRgba(c.blue, 0.35));
+  root.style.setProperty("--card-border",   hexToRgba(c.blue, 0.50));
+  root.style.setProperty("--teal-alpha12",  hexToRgba(c.teal, 0.12));
+  root.style.setProperty("--teal-alpha35",  hexToRgba(c.teal, 0.35));
 }
 
 export function loadSavedTheme(): ColorTheme {

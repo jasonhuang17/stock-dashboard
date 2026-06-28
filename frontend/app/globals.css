@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --bg:       #001d3a;
-  --teal:     #1ecfd6;
-  --gold:     #edd170;
-  --blue:     #0878a4;
-  --red:      #c05640;
-  --green:    #3daa70;
-  --dim:      #6899b8;
-  --text:     #d4eaf5;
-  --card-bg:  rgba(0, 61, 115, 0.55);
+  --bg:          #001d3a;
+  --teal:        #1ecfd6;
+  --gold:        #edd170;
+  --blue:        #0878a4;
+  --red:         #c05640;
+  --green:       #3daa70;
+  --dim:         #6899b8;
+  --text:        #d4eaf5;
+  --card-bg:     rgba(0, 61, 115, 0.55);
   --card-border: rgba(8, 120, 164, 0.38);
+  --teal-alpha12: rgba(30, 207, 214, 0.12);
+  --teal-alpha35: rgba(30, 207, 214, 0.35);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -125,8 +127,8 @@ html, body {
   display: flex;
   gap: 24px;
   padding: 10px 14px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  background: var(--teal-alpha12);
+  border: 1px solid var(--teal-alpha35);
   border-radius: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
