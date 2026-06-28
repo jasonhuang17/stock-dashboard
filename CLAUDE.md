@@ -6,9 +6,9 @@
 
 1. **本檔案**（`CLAUDE.md`）— 開發規範、啟動方式、快速架構摘要
 2. **`DEV_LOG.md`**（本地，gitignored）— 完整功能清單、所有變更紀錄、待辦清單
-3. **`docs/AI_DEV_CONTEXT.md`**（已 commit）— 完整架構說明：後端 API 路由、快取設計、前端元件結構、資料流
-4. **`docs/DESIGN_DECISIONS.md`**（已 commit）— 關鍵設計決策與不能隨意更動的理由
-5. **`docs/REGRESSION_NOTES.md`**（已 commit）— 歷史 bug、修復方式、防守性邏輯清單
+3. **`docs/AI_DEV_CONTEXT.md`**（本地，gitignored）— 完整架構說明：後端 API 路由、快取設計、前端元件結構、資料流
+4. **`docs/DESIGN_DECISIONS.md`**（本地，gitignored）— 關鍵設計決策與不能隨意更動的理由
+5. **`docs/REGRESSION_NOTES.md`**（本地，gitignored）— 歷史 bug、修復方式、防守性邏輯清單
 
 ---
 
@@ -41,7 +41,7 @@ stock-dashboard/
 ├── CLAUDE.md              # 本檔案（已 commit）
 ├── README.md              # 使用說明（已 commit）
 ├── DEV_LOG.md             # 開發紀錄（gitignored）
-├── docs/                  # AI 輔助開發文件（已 commit）
+├── docs/                  # AI 輔助開發文件（gitignored，僅存本地）
 │   ├── AI_DEV_CONTEXT.md
 │   ├── DESIGN_DECISIONS.md
 │   └── REGRESSION_NOTES.md
