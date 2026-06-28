@@ -693,7 +693,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
                   const krows = rowMap[k] ?? [];
                   return krows.length ? (
                     <div key={k} style={{ marginBottom: 16 }}>
-                      <PnLTable rows={krows} currency={currency} account={k} label={k} />
+                      <PnLTable rows={krows} currency={currency} account={`overall:${k}`} label={k} />
                     </div>
                   ) : null;
                 })}
@@ -705,7 +705,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
               const rows = rowMap[a.key] ?? [];
               return rows.length ? (
                 <div key={a.key} style={{ marginBottom: 16 }}>
-                  <PnLTable rows={rows} currency={currency} account={a.key} label={a.key} />
+                  <PnLTable rows={rows} currency={currency} account={`overall:${a.key}`} label={a.key} />
                 </div>
               ) : null;
             })
