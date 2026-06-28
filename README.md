@@ -137,7 +137,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
    - 若兩欄都填，儲存前會驗證差距是否在 1% 以內
    - 填入**總成本**（實際買入金額）可提升未實現損益精度，避免小數截斷誤差
 4. 點 **↕ 調整持倉順序 ▼** 可拖拉調整持倉顯示順序
-5. 所有資料儲存於本地 `config.json`，重啟後自動載入
+5. 所有資料儲存於本地 `user_data.json`，重啟後自動載入
 
 ### 今日損益
 
@@ -166,7 +166,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 
 ## 本地設定檔
 
-啟動後會在專案目錄自動產生 `config.json`，儲存：
+啟動後會在專案目錄自動產生 `user_data.json`，儲存：
 
 - 各分組的股票清單與顯示順序
 - 三個帳戶的持倉（股票代號、股數、平均成本）
@@ -209,7 +209,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 確認代號正確（如 `2330`、`00981A`）。系統會自動試 `.TW` 與 `.TWO`，首次載入需幾秒解析。
 
 **Q：持倉資料重啟後消失？**
-確認 `config.json` 在專案資料夾內（`stock-dashboard/config.json`）。
+確認 `user_data.json` 在專案資料夾內（`stock-dashboard/user_data.json`）。
 
 **Q：如何停止儀表板？**
 在 Terminal / PowerShell 按 `Ctrl + C`。
