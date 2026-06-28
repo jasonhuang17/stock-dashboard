@@ -34,6 +34,17 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
   const [sort, setSort] = useState<SortState>({ col: "pct", dir: "desc" });
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    api.getSettings().then(s => {
+      if (s.crypto_sort) setSort({ col: s.crypto_sort.col as SortCol, dir: s.crypto_sort.dir });
+    }).catch(() => {});
+  }, []);
+
+  function changeSort(next: SortState) {
+    setSort(next);
+    api.setSettings({ crypto_sort: { col: next.col, dir: next.dir } }).catch(() => {});
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -46,8 +57,8 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
   useEffect(() => { load(); }, [load]);
 
   function onHeaderClick(col: SortCol) {
-    setSort(prev => prev.col === col
-      ? { col, dir: prev.dir === "desc" ? "asc" : "desc" }
+    changeSort(sort.col === col
+      ? { col, dir: sort.dir === "desc" ? "asc" : "desc" }
       : { col, dir: "desc" });
   }
 
@@ -79,7 +90,7 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
           ] as const).map(([s, label]) => {
             const active = sort.col === s.col && sort.dir === s.dir;
             return (
-              <button key={label} onClick={() => setSort(s)}
+              <button key={label} onClick={() => changeSort(s)}
                 style={{ padding: "3px 10px", fontFamily: "Courier New", fontSize: "0.72rem", fontWeight: 700,
                   border: `1px solid ${active ? "var(--teal)" : "rgba(8,120,164,0.35)"}`,
                   borderRadius: 4, background: active ? "rgba(30,207,214,0.12)" : "transparent",

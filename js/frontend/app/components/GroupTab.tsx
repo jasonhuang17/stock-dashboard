@@ -31,6 +31,14 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
   const [loading, setLoading] = useState(true);
 
   const [sortMode, setSortMode] = useState<"custom" | "pct_desc" | "pct_asc" | "alpha" | "price_desc">("custom");
+
+  useEffect(() => {
+    api.getSettings().then(s => {
+      const saved = s.group_sorts?.[groupName];
+      if (saved) setSortMode(saved as typeof sortMode);
+    }).catch(() => {});
+  }, [groupName]);
+
   const [showSort, setShowSort] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [addInput, setAddInput] = useState("");
@@ -173,7 +181,11 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
           className="dash-input"
           style={{ width: "auto" }}
           value={sortMode}
-          onChange={e => setSortMode(e.target.value as typeof sortMode)}
+          onChange={e => {
+              const next = e.target.value as typeof sortMode;
+              setSortMode(next);
+              api.setSettings({ group_sorts: { [groupName]: next } }).catch(() => {});
+            }}
         >
           <option value="custom">自訂順序</option>
           <option value="pct_desc">漲幅 ↓</option>

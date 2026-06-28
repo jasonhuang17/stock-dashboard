@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import type { Groups, MarketStatus, Market } from "@/lib/types";
+import { colorThemes, applyTheme } from "@/lib/themes";
 import { GroupTab } from "./components/GroupTab";
 import { PortfolioTab } from "./components/PortfolioTab";
 import { MarketTab } from "./components/MarketTab";
@@ -46,6 +47,10 @@ export default function Dashboard() {
       setMarkets(gr.markets ?? {});
       setStatus(s);
       setUseMock(settings.use_mock);
+      if (settings.theme) {
+        const t = colorThemes.find(c => c.id === settings.theme);
+        if (t) applyTheme(t);
+      }
     } catch { /* silent */ }
     setSettingsLoaded(true);
   }, []);

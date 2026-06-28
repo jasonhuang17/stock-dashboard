@@ -161,9 +161,14 @@ def load_settings() -> dict:
     try:
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
-        return data.get("settings", {"use_mock": False})
+        s = data.get("settings", {})
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"use_mock": False}
+        s = {}
+    s.setdefault("use_mock", False)
+    s.setdefault("theme", "dark-cyber")
+    s.setdefault("crypto_sort", {"col": "pct", "dir": "desc"})
+    s.setdefault("group_sorts", {})
+    return s
 
 
 def save_settings(settings: dict) -> None:
@@ -741,6 +746,9 @@ class SettingsBody(BaseModel):
     col_order:          Optional[list] = None   # legacy flat; kept for migration reads
     pnl_cols:           Optional[dict] = None   # { account_key: { vis: [...], order: [...] } }
     protected_accounts: Optional[list] = None   # list of account keys that cannot be deleted
+    theme:              Optional[str]  = None   # active color theme ID
+    crypto_sort:        Optional[dict] = None   # { col: "pct"|"price"|"volume", dir: "asc"|"desc" }
+    group_sorts:        Optional[dict] = None   # { group_name: sort_mode_string }
 
 
 @app.get("/api/settings")
@@ -763,6 +771,14 @@ def put_settings(body: SettingsBody):
         s["pnl_cols"] = existing
     if body.protected_accounts is not None:
         s["protected_accounts"] = body.protected_accounts
+    if body.theme is not None:
+        s["theme"] = body.theme
+    if body.crypto_sort is not None:
+        s["crypto_sort"] = body.crypto_sort
+    if body.group_sorts is not None:
+        existing = s.get("group_sorts", {})
+        existing.update(body.group_sorts)
+        s["group_sorts"] = existing
     save_settings(s)
     return s
 

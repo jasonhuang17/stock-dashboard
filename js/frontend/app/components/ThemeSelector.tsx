@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { colorThemes, applyTheme, loadSavedTheme, saveTheme } from "@/lib/themes";
+import { api } from "@/lib/api";
 
 export function ThemeSelector() {
   const [open, setOpen] = useState(false);
@@ -22,6 +23,7 @@ export function ThemeSelector() {
     saveTheme(id);
     setActiveId(id);
     setOpen(false);
+    api.setSettings({ theme: id }).catch(() => {});
   }
 
   const active = colorThemes.find(t => t.id === activeId) ?? colorThemes[0];
