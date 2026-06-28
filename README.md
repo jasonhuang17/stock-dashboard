@@ -41,25 +41,78 @@
 
 ---
 
-## 環境需求
+## 安裝與啟動
 
-- **Python 3.8 或以上**
-- **Node.js 20 或以上**
-- 網路連線（抓取 Yahoo Finance 資料）
+### Windows
+
+#### 第一步：安裝必要環境（只需做一次）
+
+**1. 安裝 Python**
+
+1. 前往 https://www.python.org/downloads/
+2. 點擊 **Download Python 3.x.x**（最新版）
+3. 執行安裝檔
+4. ⚠️ 安裝畫面第一頁，務必勾選 **"Add Python to PATH"**，再點 Install Now
+5. 安裝完成後，開啟命令提示字元（Win+R → 輸入 `cmd` → Enter），輸入 `python --version`，看到版本號代表成功
+
+**2. 安裝 Node.js**
+
+1. 前往 https://nodejs.org/
+2. 點擊 **LTS** 版本下載（推薦，較穩定）
+3. 執行安裝檔，全部選預設值，一直點 Next 即可
+4. 安裝完成後，在命令提示字元輸入 `node --version`，看到版本號代表成功
 
 ---
 
-## 安裝與啟動
+#### 第二步：啟動儀表板
 
-### Windows（一鍵啟動）
+**雙擊 `start.bat`**（在專案根目錄）
 
-直接雙擊 `start.bat`。
+腳本會自動完成以下步驟：
 
-腳本會自動檢查 Python / Node.js 是否已安裝，並在首次執行時自動安裝所有相依套件，然後開啟瀏覽器到 `http://localhost:3000`。
+| 步驟 | 說明 | 時間 |
+|------|------|------|
+| 檢查 Python / Node.js | 若未安裝會顯示說明並停止 | 立即 |
+| 安裝 Python 套件 | 僅**首次**執行需要，之後跳過 | 1–2 分鐘 |
+| 安裝 Node 套件 | 僅**首次**執行需要，之後跳過 | 1–3 分鐘 |
+| 啟動 Backend :8000 | 開啟獨立的命令視窗 | 立即 |
+| 啟動 Frontend :3000 | 開啟獨立的命令視窗，首次需編譯 | 15–30 秒 |
+| 開啟瀏覽器 | 自動開啟 http://localhost:3000 | 自動 |
 
-若尚未安裝 Python 或 Node.js，腳本會顯示詳細安裝步驟：
-- **Python**：至 https://www.python.org/downloads/ 下載，安裝時勾選 **Add Python to PATH**
-- **Node.js**：至 https://nodejs.org/ 下載 LTS 版，全部預設值安裝
+> **瀏覽器開啟後顯示空白或錯誤？** 這是 Frontend 還在編譯中，等 15–30 秒後重新整理頁面即可。
+
+---
+
+#### 日常使用
+
+- **啟動**：雙擊 `start.bat`，約 5 秒後瀏覽器自動開啟
+- **停止**：關閉「Backend :8000」和「Frontend :3000」兩個命令視窗
+- **重新整理資料**：瀏覽器按 F5，或等每 30 秒自動更新
+
+---
+
+#### 常見問題（Windows）
+
+**Port 已被佔用（上次沒有正確關閉）**
+
+開啟 PowerShell，執行：
+
+```powershell
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess -Force
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
+```
+
+執行完畢後再雙擊 `start.bat` 重新啟動。
+
+**`python` 指令找不到**
+
+安裝 Python 時沒有勾選 "Add Python to PATH"。解決方式：
+- 重新執行 Python 安裝檔 → 選 **Modify** → 勾選 **Add Python to environment variables** → 儲存
+- 或在命令提示字元改用 `py` 取代 `python`（部分 Windows 版本適用）
+
+**防火牆詢問是否允許存取**
+
+點擊**允許存取**，這是 Python（FastAPI）和 Node.js 要在本機監聽 port 的正常請求，不會對外開放。
 
 ---
 
@@ -98,43 +151,11 @@ cd js/frontend && npm run dev
 
 瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。
 
----
-
-### 常見問題：Port 已被佔用（Address already in use）
-
-啟動時出現 `[Errno 48] Address already in use` 或 `EADDRINUSE`，代表上次的 process 沒有正常結束。
-
-**macOS / Linux（Terminal）**
+**Port 已被佔用**
 
 ```bash
-# 清掉舊 process 並直接重啟（一行搞定）
 lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9 2>/dev/null; ./start-js.sh
-
-# 只清 process，不重啟
-lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9
 ```
-
-**Windows（Command Prompt）**
-
-```cmd
-:: 查詢佔用 8000 的 PID
-netstat -ano | findstr :8000
-
-:: 用上方查到的 PID 強制終止（替換 <PID>）
-taskkill /PID <PID> /F
-```
-
-**Windows（PowerShell）**
-
-```powershell
-# 一行清掉 :8000
-Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess -Force
-
-# 一行清掉 :3000
-Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
-```
-
-清完後重新執行 `./start-js.sh`（macOS）或 `start-js.sh`（Windows Git Bash）。
 
 ---
 
@@ -226,7 +247,8 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 確認 `user_data.json` 在 `stock-dashboard/js/user_data.json`。
 
 **Q：如何停止儀表板？**
-在 Terminal / PowerShell 按 `Ctrl + C`。
+- **Windows**：關閉「Backend :8000」和「Frontend :3000」兩個命令視窗
+- **macOS / Linux**：在 Terminal 按 `Ctrl + C`
 
 ---
 
