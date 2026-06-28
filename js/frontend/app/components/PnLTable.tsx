@@ -28,7 +28,7 @@ const SYNC_EVENT = "pnl-cols-sync";
 // Only ticker is always shown; everything else is optional
 
 type OptColId =
-  | "shares" | "avg_cost" | "cost_basis" | "price"
+  | "shares" | "avg_cost" | "cost_basis" | "price" | "market_value"
   | "day_high" | "day_low" | "volume"
   | "week_high" | "week_low"
   | "per_share" | "pct"
@@ -38,8 +38,9 @@ type OptColId =
 const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
   { id: "shares",      label: "股數",        defaultOn: true  },
   { id: "avg_cost",    label: "單股成本",     defaultOn: true  },
-  { id: "cost_basis",  label: "總成本",       defaultOn: false },
-  { id: "price",       label: "現價",        defaultOn: true  },
+  { id: "cost_basis",     label: "總成本",       defaultOn: false },
+  { id: "price",          label: "現價",        defaultOn: true  },
+  { id: "market_value",   label: "市值",        defaultOn: false },
   { id: "day_high",    label: "每日最高",     defaultOn: false },
   { id: "day_low",     label: "每日最低",     defaultOn: false },
   { id: "volume",      label: "成交量",       defaultOn: false },
@@ -75,6 +76,7 @@ function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[
     avg_cost:    { key: "avg_cost",    label: `單股成本 (${sym})`, fmt: r => r.avg_cost.toFixed(3) },
     cost_basis:  { key: "cost_basis",  label: `總成本 (${sym})`,  fmt: r => fmtMoney(r.cost_basis, currency) },
     price:       { key: "price",       label: "現價",    fmt: r => r.price !== null ? `${priceSym}${r.price.toFixed(2)}` : "—" },
+    market_value: { key: "market_value" as Col, label: `市值 (${sym})`, fmt: r => r.price !== null ? fmtMoney(r.price * r.shares, currency) : "—" },
     day_high:    { key: "day_high" as Col, label: "每日最高", fmt: r => r.day_high !== null ? `${priceSym}${r.day_high.toFixed(2)}` : "—" },
     day_low:     { key: "day_low"  as Col, label: "每日最低", fmt: r => r.day_low  !== null ? `${priceSym}${r.day_low.toFixed(2)}`  : "—" },
     volume:      { key: "volume"   as Col, label: "成交量", fmt: r => r.volume !== null ? Math.round(r.volume).toLocaleString() : "—" },
@@ -105,11 +107,16 @@ function colorOf(val: number | null) {
   return val >= 0 ? "pos" : "neg";
 }
 
+function rowVal(row: PortfolioRow, col: string): number | string | null {
+  if (col === "market_value") return row.price !== null ? row.price * row.shares : null;
+  return (row as unknown as Record<string, number | string | null>)[col] ?? null;
+}
+
 function sortRows(rows: PortfolioRow[], ss: SortState): PortfolioRow[] {
   if (!ss.col) return rows;
   return [...rows].sort((a, b) => {
-    const av = a[ss.col!] as number | string | null;
-    const bv = b[ss.col!] as number | string | null;
+    const av = rowVal(a, ss.col!);
+    const bv = rowVal(b, ss.col!);
     if (av === null) return 1;
     if (bv === null) return -1;
     const cmp = av < bv ? -1 : av > bv ? 1 : 0;
@@ -250,8 +257,9 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const totalToday  = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
   const totalCost   = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const totalMV     = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
   const hasData     = rows.some(r => r.price !== null);
-  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis"].includes(c.key));
+  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis", "market_value"].includes(c.key));
 
   // Divider line: borderRight on the divider column with extra paddingRight so the line sits
   // closer to the right column (more space on the left side of the line).
@@ -397,7 +405,8 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                   if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400, ...ds }}>合計</td>;
                   if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}</td>;
                   if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}</td>;
-                  if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalCost, currency)}</td>;
+                  if (c.key === "cost_basis")    return <td key="cost_basis"    style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalCost, currency)}</td>;
+                  if ((c.key as string) === "market_value") return <td key="market_value"  style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalMV, currency)}</td>;
                   return <td key={c.key} style={ds} />;
                 })}
               </tr>
