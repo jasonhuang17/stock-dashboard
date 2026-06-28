@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 js/backend/quote_log.jsonl
 DEV_LOG.md
+docs/
