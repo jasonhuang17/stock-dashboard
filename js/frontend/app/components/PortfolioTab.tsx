@@ -667,7 +667,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   const hasGroups = usdGroups.length > 0 || twdGroups.length > 0;
 
   const groupDivider = <div style={{ margin: "16px 0 36px", borderTop: "2px solid rgba(30,207,214,0.25)", borderRadius: 1 }} />;
-  const sectionDivider = <div style={{ margin: "32px 0 28px", borderTop: "2px solid rgba(237,209,112,0.35)", borderRadius: 1 }} />;
+  const sectionDivider = <div style={{ margin: "32px 0 28px", borderTop: "10px solid rgba(237,209,112,0.35)", borderRadius: 2 }} />;
 
   function renderSection(currency: Currency, label: string, allRows: PortfolioRow[], accts: { key: string; currency: Currency }[], groups: AccountGroup[], top: boolean) {
     if (!allRows.length) return null;
