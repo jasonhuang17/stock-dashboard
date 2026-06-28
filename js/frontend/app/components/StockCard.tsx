@@ -1,5 +1,35 @@
 "use client";
+import { useState } from "react";
 import type { Quote, PremarketQuote } from "@/lib/types";
+
+function FixedTip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [hovered, setHovered] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  return (
+    <span
+      onMouseEnter={e => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setPos({ x: r.left + r.width / 2, y: r.top });
+        setHovered(true);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+      <span style={{
+        position: "fixed", left: pos.x, top: pos.y - 8,
+        transform: "translate(-50%, -100%)",
+        opacity: hovered ? 1 : 0, transition: "opacity 0.12s",
+        pointerEvents: "none", background: "#001828",
+        border: "1px solid rgba(30,207,214,0.3)", color: "var(--text)",
+        fontSize: "0.68rem", fontWeight: 400, letterSpacing: 0,
+        padding: "5px 10px", borderRadius: 5, whiteSpace: "nowrap",
+        zIndex: 400, boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+      }}>
+        {text}
+      </span>
+    </span>
+  );
+}
 
 function colorClass(pct: number | null) {
   if (pct === null) return "neu";
@@ -59,10 +89,9 @@ export function PremarketCard({ q }: { q: PremarketQuote }) {
             {arrow(q.pct)} {q.pct !== null ? `${q.pct >= 0 ? "+" : ""}${q.pct.toFixed(2)}%` : "—"}
           </div>
           <div style={{ fontSize: "0.68rem", color: "var(--dim)", marginTop: 4 }}>
-            <span className="col-tip" style={{ cursor: "default" }}>
-              <span style={{ borderBottom: "1px dotted rgba(100,130,160,0.5)" }}>vs prev close</span>
-              <span className="col-tip-box" style={{ fontSize: "0.68rem" }}>相對於上個交易日收盤價的變動</span>
-            </span>
+            <FixedTip text="相對於上個交易日收盤價的變動">
+              <span style={{ borderBottom: "1px dotted rgba(100,130,160,0.5)", cursor: "default" }}>vs prev close</span>
+            </FixedTip>
             {" "}${q.prev_close?.toFixed(2) ?? "—"} · {timeStr}
           </div>
         </>

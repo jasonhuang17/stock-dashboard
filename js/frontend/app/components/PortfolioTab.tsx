@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { api, fmtMoney, fmtPct } from "@/lib/api";
 import type { PortfolioRow, PremarketPortfolioRow, Portfolio } from "@/lib/types";
 import { twName } from "@/lib/tw-names";
@@ -14,6 +14,35 @@ import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove 
 import { CSS } from "@dnd-kit/utilities";
 
 type Currency = "USD" | "TWD";
+
+function LockTip({ text, children }: { text: string; children: ReactNode }) {
+  const [hovered, setHovered] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  return (
+    <span style={{ marginLeft: "auto", display: "inline-flex" }}
+      onMouseEnter={e => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setPos({ x: r.right, y: r.top });
+        setHovered(true);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+      <span style={{
+        position: "fixed", left: pos.x, top: pos.y - 8,
+        transform: "translate(-100%, -100%)",
+        opacity: hovered ? 1 : 0, transition: "opacity 0.12s",
+        pointerEvents: "none", background: "#001828",
+        border: "1px solid rgba(30,207,214,0.3)", color: "var(--text)",
+        fontSize: "0.72rem", fontWeight: 400, letterSpacing: 0,
+        padding: "5px 10px", borderRadius: 5, whiteSpace: "nowrap",
+        zIndex: 400, boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+      }}>
+        {text}
+      </span>
+    </span>
+  );
+}
 
 // ── Per-account P&L tab ───────────────────────────────────────────────────────
 function AccountPnL({ account, currency, refreshKey }: { account: string; currency: Currency; refreshKey: number }) {
@@ -749,17 +778,14 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
                 </button>
               ))}
               {!useMock && (
-                <span className="col-tip" style={{ marginLeft: "auto" }}>
+                <LockTip text={isProtected ? "已鎖定：無法刪除此帳戶（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}>
                   <button onClick={() => toggleProtect(acct.key)}
                     style={{ background: "none", border: "none", cursor: "pointer",
                       fontSize: "0.78rem", padding: "0 4px", opacity: isProtected ? 1 : 0.35,
                       color: isProtected ? "var(--teal)" : "var(--dim)" }}>
                     {isProtected ? "🔒" : "🔓"}
                   </button>
-                  <span className="col-tip-box" style={{ left: "auto", right: 0, transform: "none" }}>
-                    {isProtected ? "已鎖定：無法刪除此帳戶（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}
-                  </span>
-                </span>
+                </LockTip>
               )}
             </div>
             <div style={{ display: isActive && pnlTab === 1 ? "none" : "block" }}>
