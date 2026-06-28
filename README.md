@@ -135,6 +135,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 
 ---
 
+<!-- Streamlit 版本（暫時隱藏）
 ## 建議：使用虛擬環境（Streamlit 版本，選用）
 
 **macOS**
@@ -154,6 +155,7 @@ venv\Scripts\activate
 pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
 streamlit run stock_dashboard.py
 ```
+-->
 
 ---
 
@@ -210,6 +212,7 @@ streamlit run stock_dashboard.py
 
 ## 相依套件
 
+<!-- Streamlit 版本（暫時隱藏）
 ### Streamlit 版本
 
 | 套件 | 用途 |
@@ -221,6 +224,7 @@ streamlit run stock_dashboard.py
 | `pytz` | 時區轉換（美東時間） |
 | `streamlit-sortables` | 拖拉排序元件 |
 | `cachetools` | TTL Cache（for `_resolve_tw_ticker` 等函式） |
+-->
 
 ### JS 版本 backend
 
