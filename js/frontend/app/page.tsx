@@ -1,7 +1,13 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import type { Groups, MarketStatus, Market } from "@/lib/types";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { colorThemes, applyTheme } from "@/lib/themes";
 import { GroupTab } from "./components/GroupTab";
 import { PortfolioTab } from "./components/PortfolioTab";
@@ -17,6 +23,48 @@ function statusClass(s: MarketStatus) {
   return "s-closed";
 }
 
+function SortableGroupTab({ id, isActive, isPinned, isRenaming, useMock, renameValue, market,
+  onActivate, onDoubleClick, onDelete, onRenameChange, onRenameBlur, onRenameKeyDown,
+}: {
+  id: string; isActive: boolean; isPinned: boolean; isRenaming: boolean; useMock: boolean;
+  renameValue: string; market: Market;
+  onActivate: () => void; onDoubleClick: () => void; onDelete: () => void;
+  onRenameChange: (v: string) => void; onRenameBlur: () => void;
+  onRenameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <div ref={setNodeRef} style={{ ...style, position: "relative", display: "inline-flex", alignItems: "center" }} {...attributes}>
+      {isRenaming ? (
+        <input autoFocus value={renameValue}
+          onChange={e => onRenameChange(e.target.value)}
+          onKeyDown={onRenameKeyDown}
+          onBlur={onRenameBlur}
+          style={{ fontFamily: "Courier New", fontSize: "0.78rem", background: "#002040",
+            border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)",
+            padding: "3px 8px", width: 120, outline: "none" }}
+        />
+      ) : (
+        <button className={`tab-btn${isActive ? " active" : ""}`}
+          onClick={onActivate}
+          onDoubleClick={onDoubleClick}
+          {...listeners}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+        >
+          {id}<span style={{ fontSize: "0.6rem", opacity: 0.55, marginLeft: 3 }}>{market === "TW" ? "🇹🇼" : "🇺🇸"}</span>
+        </button>
+      )}
+      {!isPinned && !isRenaming && !useMock && (
+        <span onClick={e => { e.stopPropagation(); onDelete(); }}
+          style={{ fontSize: "0.65rem", color: "var(--dim)", cursor: "pointer", lineHeight: 1, padding: "2px 3px" }}
+          title="Delete group"
+        >×</span>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [tab, setTab]           = useState(0);
   const [groups, setGroups]     = useState<Groups>({});
@@ -27,8 +75,7 @@ export default function Dashboard() {
   const [newGroupMarket, setNewGroupMarket] = useState<Market>("US");
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const groupSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [status, setStatus]     = useState<{ status: MarketStatus; time: string; us?: { status: MarketStatus; time: string }; tw?: { status: MarketStatus; time: string } } | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -146,6 +193,12 @@ export default function Dashboard() {
   }
 
   async function handleReorderGroups(newOrder: string[]) {
+    const activeGroup = tab > 0 && tab <= groupNames.length ? groupNames[tab - 1] : null;
+    setGroups(prev => Object.fromEntries(newOrder.filter(k => k in prev).map(k => [k, prev[k]])) as Groups);
+    if (activeGroup) {
+      const newIdx = newOrder.indexOf(activeGroup);
+      if (newIdx !== -1) handleSetTab(newIdx + 1);
+    }
     try {
       const res = await api.reorderGroups(newOrder);
       setGroups(res.groups);
@@ -236,75 +289,39 @@ export default function Dashboard() {
           <span style={{ width: 1, height: 18, background: "rgba(8,120,164,0.35)", margin: "0 4px", flexShrink: 0 }} />
         )}
 
-        {/* Group tabs */}
-        {groupNames.map((g, i) => {
-          const tabIdx = i + 1;
-          const isActive = tab === tabIdx;
-          const isPinned = pinned.includes(g);
-          const isRenaming = renamingGroup === g;
-          const isDragging = dragIdx === i;
-          const isDropTarget = dragOverIdx === i && dragIdx !== i;
-          return (
-            <div
-              key={g}
-              draggable={!isRenaming && !useMock}
-              onDragStart={() => { if (useMock) return; setDragIdx(i); setDragOverIdx(i); }}
-              onDragEnter={() => { if (useMock) return; setDragOverIdx(i); }}
-              onDragOver={e => { if (!useMock) e.preventDefault(); }}
-              onDrop={() => {
-                if (useMock || dragIdx === null || dragIdx === i) { setDragIdx(null); setDragOverIdx(null); return; }
-                const newOrder = [...groupNames];
-                const [moved] = newOrder.splice(dragIdx, 1);
-                newOrder.splice(i, 0, moved);
-                handleReorderGroups(newOrder);
-                setDragIdx(null);
-                setDragOverIdx(null);
-              }}
-              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-              style={{
-                position: "relative", display: "inline-flex", alignItems: "center",
-                opacity: isDragging ? 0.4 : 1,
-                borderLeft: isDropTarget ? "2px solid var(--teal)" : "2px solid transparent",
-                transition: "border-color 0.1s",
-              }}
-            >
-              {isRenaming ? (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); }
-                    }}
-                    onBlur={() => {
-                      if (renameEscRef.current) { renameEscRef.current = false; return; }
-                      handleRenameGroup();
-                    }}
-                    style={{ fontFamily: "Courier New", fontSize: "0.78rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 8px", width: 120, outline: "none" }}
+        {/* Group tabs — dnd-kit sortable */}
+        <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
+          const { active, over } = event;
+          if (!useMock && over && active.id !== over.id) {
+            const oldIdx = groupNames.indexOf(active.id as string);
+            const newIdx = groupNames.indexOf(over.id as string);
+            handleReorderGroups(arrayMove(groupNames, oldIdx, newIdx));
+          }
+        }}>
+          <SortableContext items={groupNames} strategy={horizontalListSortingStrategy}>
+            <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 0 }}>
+              {groupNames.map((g, i) => {
+                const tabIdx = i + 1;
+                return (
+                  <SortableGroupTab key={g} id={g}
+                    isActive={tab === tabIdx}
+                    isPinned={pinned.includes(g)}
+                    isRenaming={renamingGroup === g}
+                    useMock={useMock}
+                    renameValue={renameValue}
+                    market={markets[g] ?? "US"}
+                    onActivate={() => handleSetTab(tabIdx)}
+                    onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
+                    onDelete={() => handleDeleteGroup(g)}
+                    onRenameChange={v => setRenameValue(v)}
+                    onRenameBlur={() => { if (renameEscRef.current) { renameEscRef.current = false; return; } handleRenameGroup(); }}
+                    onRenameKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); } }}
                   />
-                </div>
-              ) : (
-                <button
-                  className={`tab-btn${isActive ? " active" : ""}`}
-                  onClick={() => handleSetTab(tabIdx)}
-                  onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
-                  title={useMock ? "exit demo to edit" : "double-click to rename"}
-                >
-                  {g}<span style={{ fontSize: "0.6rem", opacity: 0.55, marginLeft: 3 }}>{markets[g] === "TW" ? "🇹🇼" : "🇺🇸"}</span>
-                </button>
-              )}
-              {!isPinned && !isRenaming && !useMock && (
-                <span
-                  onClick={e => { e.stopPropagation(); handleDeleteGroup(g); }}
-                  style={{ fontSize: "0.65rem", color: "var(--dim)", cursor: "pointer", lineHeight: 1, padding: "2px 3px" }}
-                  title="Delete group"
-                >×</span>
-              )}
+                );
+              })}
             </div>
-          );
-        })}
+          </SortableContext>
+        </DndContext>
 
         {/* Add group */}
         {!addingGroup ? (
