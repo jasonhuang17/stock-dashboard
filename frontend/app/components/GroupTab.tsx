@@ -14,10 +14,12 @@ interface Props {
   market: Market;
   refreshKey: number;
   useMock: boolean;
+  isPinned: boolean;
   onTickersChange: (tickers: string[]) => void;
+  onTogglePin: () => void;
 }
 
-export function GroupTab({ groupName, tickers, market, refreshKey, useMock, onTickersChange }: Props) {
+export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPinned, onTickersChange, onTogglePin }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("cards");
 
   useEffect(() => {
@@ -116,12 +118,21 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, onTi
   return (
     <div>
       {/* Sub-tabs */}
-      <div className="tab-bar">
+      <div className="tab-bar" style={{ alignItems: "center" }}>
         {subTabs.map(s => (
           <button key={s.key} className={`tab-btn${subTab === s.key ? " active" : ""}`} onClick={() => { setSubTab(s.key); sessionStorage.setItem(`group-subtab-${groupName}`, s.key); }}>
             {s.label}
           </button>
         ))}
+        {!useMock && (
+          <button onClick={onTogglePin}
+            title={isPinned ? "解除保護（允許刪除）" : "保護群組（防止刪除）"}
+            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer",
+              fontSize: "0.78rem", padding: "0 4px", opacity: isPinned ? 1 : 0.35,
+              color: isPinned ? "var(--teal)" : "var(--dim)" }}>
+            {isPinned ? "🔒" : "🔓"}
+          </button>
+        )}
       </div>
 
       {/* Stats bar */}

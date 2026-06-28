@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeInitializer } from "./components/ThemeInitializer";
 
 export const metadata: Metadata = {
   title: "◈ Stock Dashboard",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-TW">
-      <body style={{ minHeight: "100vh" }}>{children}</body>
+      <body style={{ minHeight: "100vh" }}>
+        <ThemeInitializer />
+        {children}
+      </body>
     </html>
   );
 }

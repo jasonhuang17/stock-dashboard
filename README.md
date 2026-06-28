@@ -2,9 +2,9 @@
 
 美股與台股即時漲跌幅儀表板，深色科技風 UI，支援多帳戶持倉損益追蹤、多組股票、多種圖表，每 30 秒自動更新。
 
-**兩個版本，共用同一份 `config.json`：**
-- **Streamlit 版本**：`stock_dashboard.py`，單檔 Python，5 秒啟動
-- **JS 版本**：FastAPI backend + Next.js frontend，適合作為獨立 Web 應用
+**JS 版本**：FastAPI backend + Next.js frontend，完整 Web 應用體驗
+
+<!-- Python/Streamlit 版本暫時隱藏 -->
 
 ---
 
@@ -12,11 +12,14 @@
 
 | 功能 | 說明 |
 |------|------|
-| 💼 多帳戶持倉 | 複委託台幣戶、複委託美金戶、台股帳戶各自獨立管理 |
-| 📊 整體損益 | 美股兩帳戶分群顯示，合計總損益列；台股獨立顯示 |
-| 💰 今日損益 | 單股漲跌金額與%、今日損益、未實現損益；可選顯示每日最高/最低/成交量、52週最高/最低、YTD損益/漲幅等欄位，支援拖曳排序，設定存入 user_data.json |
-| 🌙 盤後損益 | JS 版本：帳戶今日損益下方可展開盤後/前損益 table（收盤價 / 盤後價 / 漲跌 / 損益） |
-| 📈 多種圖表 | 氣泡圖 / 瀑布圖（合計欄顯示金額） / 樹狀熱力圖 / 長條圖，可切換 |
+| 💼 多帳戶持倉 | 動態帳戶管理：可新增、重命名、刪除帳戶；幣別 USD/TWD 各自獨立 |
+| 📊 整體損益 | 按幣別動態分組顯示，合計總損益列 |
+| 💰 今日損益 | 單股漲跌金額與%、今日損益、未實現損益；11+ 可選欄位（52W最高/最低/YTD/成交量等），拖曳排序，垂直分隔線，設定永久儲存 |
+| 🌙 盤後損益 | 帳戶今日損益下方可展開盤後/前損益 table（收盤價 / 盤後價 / 漲跌 / 損益） |
+| 📈 多種圖表 | 氣泡圖 / 瀑布圖 / 樹狀熱力圖 / 長條圖，可切換今日損益或未實現損益 |
+| 📉 K 線頁面 | 點擊任一代號進入 `/stock/[ticker]`，1d/1w/1m/3m/YTD/1y/5y/all 顆粒度，含成交量 |
+| 🌐 市場總覽 | 📈 市場 tab：US 市場即時漲幅/跌幅/成交量前 25 名（Yahoo Finance 全市場 Screener）；TW 熱門股票排序 |
+| ₿ 加密貨幣 | 15 幣種卡片 + 表格，排序切換 |
 | 📋 Cards | 每支股票顯示現價與當日漲跌幅 |
 | 🥧 圓餅圖 | 依漲跌幅絕對值顯示各股佔比 |
 | 📊 長條圖 | 橫向以 0% 為中心延伸，正規化顯示 |
@@ -49,27 +52,11 @@
 
 ## 安裝與啟動
 
-### Streamlit 版本（推薦，快速啟動）
-
-**macOS**
-
-```bash
+<!-- Streamlit 版本（暫時隱藏）
+### Streamlit 版本（快速啟動）
 pip3 install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
-cd ~/Desktop/stock-dashboard
-streamlit run stock_dashboard.py
-```
-
-**Windows**
-
-```powershell
-pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
-cd Desktop\stock-dashboard
-streamlit run stock_dashboard.py
-```
-
-瀏覽器開啟 `http://localhost:8501`。
-
----
+streamlit run stock_dashboard.py  →  http://localhost:8501
+-->
 
 ### JS 版本（FastAPI + Next.js）
 
@@ -259,12 +246,6 @@ streamlit run stock_dashboard.py
 ---
 
 ## 常見問題
-
-**Q：啟動後瀏覽器沒有自動開啟？**
-手動前往 `http://localhost:8501`。
-
-**Q：顯示 `ModuleNotFoundError`？**
-確認用相同的 `python` / `pip` 執行安裝與啟動，或改用虛擬環境。
 
 **Q：所有股票顯示 `N/A`？**
 可能是網路問題或 Yahoo Finance 暫時限流，等 30 秒後自動重試，或點右上角 **↻ REFRESH**。

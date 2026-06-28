@@ -32,8 +32,8 @@ function BubbleChart({ rows, mode }: { rows: PortfolioRow[]; mode: Mode }) {
   const ys = data.map(d => d.y);
   const xMin = Math.min(...xs, 0), xMax = Math.max(...xs, 0);
   const yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 0);
-  const xPad = Math.max((xMax - xMin) * 0.22, 1);
-  const yPad = Math.max((yMax - yMin) * 0.30, 1);
+  const xPad = Math.max((xMax - xMin) * 0.30, 1);
+  const yPad = Math.max((yMax - yMin) * 0.50, 1);
   const xDomain: [number, number] = [xMin - xPad, xMax + xPad];
   const yDomainPadded: [number, number] = [yMin - yPad, yMax + yPad];
 
@@ -75,8 +75,8 @@ function BubbleChart({ rows, mode }: { rows: PortfolioRow[]; mode: Mode }) {
   const yLabel = isUnreal ? "未實現損益" : "今日損益";
 
   return (
-    <ResponsiveContainer width="100%" height={340}>
-      <ScatterChart margin={{ top: 48, right: 60, bottom: 24, left: 16 }}>
+    <ResponsiveContainer width="100%" height={400}>
+      <ScatterChart margin={{ top: 72, right: 64, bottom: 72, left: 16 }}>
         <XAxis dataKey="x" type="number" name={xLabel} domain={xDomain} tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
         <YAxis dataKey="y" type="number" name={yLabel} domain={yDomain} ticks={yTicks} tickFormatter={v => v.toLocaleString()} tick={{ fill: "#6899b8", fontSize: 11 }} />
         <Tooltip
@@ -118,14 +118,21 @@ function WaterfallChart({ rows, currency, mode }: { rows: PortfolioRow[]; curren
     ...sorted.map(r => ({ name: r.name || r.ticker, value: (r[field] as number) ?? 0 })),
     { name: "合計", value: total },
   ];
+  const allVals = data.map(d => d.value);
+  const yMax = Math.max(...allVals, 0);
+  const yMin = Math.min(...allVals, 0);
+  const yPad = Math.max(Math.abs(yMax - yMin) * 0.20, 1);
+  const yDomain: [number, number] = [yMin - yPad * 0.5, yMax + yPad];
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+      <BarChart data={data} margin={{ top: 24, right: 20, bottom: 20, left: 10 }}>
         <XAxis dataKey="name" tick={{ fill: "#6899b8", fontSize: 11 }} />
-        <YAxis tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
+        <YAxis tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} domain={yDomain} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
+          labelStyle={{ color: "#1ECFD6" }}
+          itemStyle={{ color: "#d4eaf5" }}
           formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, label] as [string, string]; }}
         />
         <ReferenceLine y={0} stroke="rgba(8,120,164,0.3)" />
@@ -191,11 +198,16 @@ function BarChartView({ rows, currency, mode }: { rows: PortfolioRow[]; currency
   const sym = currency === "TWD" ? "NT$" : "$";
   const hasTwNames = sorted.some(r => r.name);
   const data = sorted.map(r => ({ ...r, displayName: r.name ? `${r.ticker} ${r.name}` : r.ticker }));
+  const xVals = data.map(d => (d[field] as number | null) ?? 0);
+  const xMax = Math.max(...xVals, 0);
+  const xMin = Math.min(...xVals, 0);
+  const xPad = Math.max(Math.abs(xMax - xMin) * 0.25, 1);
+  const xDomain: [number, number] = [xMin - xPad * 0.5, xMax + xPad];
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 36)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 60, left: 10, bottom: 4 }}>
-        <XAxis type="number" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} />
+        <XAxis type="number" tick={{ fill: "#6899b8", fontSize: 11 }} tickFormatter={v => `${sym}${v.toFixed(0)}`} domain={xDomain} />
         <YAxis type="category" dataKey="displayName" tick={{ fill: "#1ECFD6", fontSize: hasTwNames ? 10 : 11, fontFamily: "Courier New", fontWeight: 700 }} width={hasTwNames ? 110 : 55} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}

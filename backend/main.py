@@ -7,7 +7,8 @@ import concurrent.futures
 import json
 import os
 import threading
-from datetime import datetime
+import urllib.request
+from datetime import datetime, time as dtime, timedelta
 from typing import List, Optional
 import pytz
 import yfinance as yf
@@ -208,11 +209,13 @@ def active_groups() -> dict:
 # Keyed by individual ticker string (not the whole request tuple) so that
 # different groups sharing a ticker reuse the same cached entry.
 _quotes_cache: TTLCache = TTLCache(maxsize=500, ttl=28)
+_quotes_stale: dict = {}   # last known-good quote per ticker; no expiry — fallback when fresh fetch fails
 _premarket_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _exists_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 _tw_name_cache: dict = {}  # permanent — ticker names don't change
 _ytd_cache: TTLCache = TTLCache(maxsize=500, ttl=86400)   # 24h — year-start price
+_52w_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)    # 1h — 52-week high/low (background-populated)
 _cache_lock = threading.Lock()
 
 # ── Quote logging ─────────────────────────────────────────────────────────────
@@ -268,48 +271,28 @@ def _tw_market_status() -> tuple[str, datetime]:
 
 
 
-def _single_ticker_quote(ticker: str) -> dict:
-    """Fetch quote via fast_info (real-time endpoint) for price/pct/prev_close,
-    and history() for day_high/day_low/volume."""
-    base = {"ticker": ticker, "price": None, "pct": None,
-            "day_high": None, "day_low": None, "volume": None,
-            "week_high": None, "week_low": None}
+def _fetch_52w_batch(tickers: list) -> None:
+    """Background batch-fetch 52W high/low via yf.download(period='1y').
+    Populates _52w_cache in place; called from a daemon thread in _fetch_quotes."""
+    if not tickers:
+        return
     try:
-        t = yf.Ticker(ticker)
-        fi = t.fast_info
-        price = fi.get("lastPrice") or fi.get("regularMarketPrice")
-        prev  = fi.get("regularMarketPreviousClose") or fi.get("previousClose")
-        if price and prev:
-            base["price"] = float(price)
-            base["pct"]   = (float(price) - float(prev)) / float(prev) * 100
-        yh = fi.get("yearHigh")
-        yl = fi.get("yearLow")
-        if yh: base["week_high"] = float(yh)
-        if yl: base["week_low"]  = float(yl)
-        # day_high / day_low / volume from history (fast_info day_high/low can lag)
-        raw = t.history(period="2d", interval="1d", auto_adjust=False)
-        if raw.empty:
-            # Some ETFs (e.g. preferred-class TW ETFs) don't respond to Ticker.history();
-            # yf.download is more reliable as a fallback.
-            raw = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=False)
-        if not raw.empty:
-            for field, key in (("High", "day_high"), ("Low", "day_low"), ("Volume", "volume")):
-                if field in raw.columns:
-                    s = raw[field].dropna()
-                    if len(s) >= 1:
-                        base[key] = float(s.iloc[-1])
-            # If fast_info gave no price, derive it from the last two Close bars.
-            if base["price"] is None and "Close" in raw.columns:
-                closes = raw["Close"].dropna()
-                if len(closes) >= 2:
-                    p, prev_p = float(closes.iloc[-1]), float(closes.iloc[-2])
-                    base["price"] = p
-                    base["pct"] = (p - prev_p) / prev_p * 100
-                elif len(closes) == 1:
-                    base["price"] = float(closes.iloc[-1])
+        dl_arg = tickers[0] if len(tickers) == 1 else tickers
+        df = yf.download(dl_arg, period="1y", interval="1d", progress=False, auto_adjust=False)
+        if df.empty:
+            return
+        is_multi = hasattr(df.columns, "levels")
+        for t in tickers:
+            try:
+                highs = df["High"][t].dropna() if is_multi else df["High"].dropna()
+                lows  = df["Low"][t].dropna()  if is_multi else df["Low"].dropna()
+                if len(highs) and len(lows):
+                    with _cache_lock:
+                        _52w_cache[t] = {"week_high": float(highs.max()), "week_low": float(lows.min())}
+            except Exception:
+                pass
     except Exception:
         pass
-    return base
 
 
 def _fetch_ytd_batch(tickers: list) -> dict:
@@ -361,34 +344,93 @@ def _fetch_ytd_batch(tickers: list) -> dict:
 
 
 def _fetch_quotes(tickers: tuple) -> list[dict]:
+    """Batch-fetch quotes via a single yf.download call.
+    One HTTP request for all cache misses eliminates the per-ticker concurrent requests
+    that previously triggered Yahoo Finance rate limits and caused intermittent null data.
+    Falls back to _quotes_stale (last known-good, no expiry) when a fresh fetch fails."""
     if not tickers:
         return []
 
-    # Split into cached vs missing using per-ticker cache entries.
     hit: dict[str, dict] = {}
     miss: list[str] = []
+    miss_52w: list[str] = []
     with _cache_lock:
         for t in tickers:
             if t in _quotes_cache:
                 hit[t] = _quotes_cache[t]
             else:
                 miss.append(t)
+            if t not in _52w_cache:
+                miss_52w.append(t)
 
     if miss:
-        # Each thread creates its own yf.Ticker instance — no shared state.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-            future_map = {ex.submit(_single_ticker_quote, t): t for t in miss}
-            for f in concurrent.futures.as_completed(future_map):
-                t = future_map[f]
-                row = f.result()
-                hit[t] = row
+        _empty = lambda t: {"ticker": t, "price": None, "pct": None,
+                            "day_high": None, "day_low": None, "volume": None,
+                            "week_high": None, "week_low": None}
+        try:
+            dl_arg = miss[0] if len(miss) == 1 else miss
+            df = yf.download(dl_arg, period="5d", interval="1d", progress=False, auto_adjust=False)
+            is_multi = (not df.empty) and hasattr(df.columns, "levels")
+            for t in miss:
+                row = _empty(t)
+                if not df.empty:
+                    try:
+                        if is_multi:
+                            closes = df["Close"][t].dropna()
+                            highs  = df["High"][t].dropna()
+                            lows   = df["Low"][t].dropna()
+                            vols   = df["Volume"][t].dropna()
+                        else:
+                            closes = df["Close"].dropna()
+                            highs  = df["High"].dropna()
+                            lows   = df["Low"].dropna()
+                            vols   = df["Volume"].dropna()
+                        if len(closes) >= 2:
+                            row["price"] = float(closes.iloc[-1])
+                            row["pct"] = (float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100
+                        elif len(closes) == 1:
+                            row["price"] = float(closes.iloc[-1])
+                            # Fallback: try fast_info for prev close (sparse tickers like warrants)
+                            try:
+                                pc = yf.Ticker(t).fast_info.get("previousClose") or yf.Ticker(t).fast_info.get("regularMarketPreviousClose")
+                                if pc:
+                                    row["pct"] = (row["price"] - float(pc)) / float(pc) * 100
+                            except Exception:
+                                pass
+                        if len(highs) >= 1: row["day_high"] = float(highs.iloc[-1])
+                        if len(lows)  >= 1: row["day_low"]  = float(lows.iloc[-1])
+                        if len(vols)  >= 1: row["volume"]   = float(vols.iloc[-1])
+                    except Exception:
+                        pass
+                # Merge 52W from background cache (populated by _fetch_52w_batch daemon thread)
+                with _cache_lock:
+                    w = _52w_cache.get(t)
+                if w:
+                    row["week_high"] = w.get("week_high")
+                    row["week_low"]  = w.get("week_low")
                 if row.get("price") is not None:
                     with _cache_lock:
                         _quotes_cache[t] = row
+                        _quotes_stale[t] = row
+                    hit[t] = row
+                elif t in _quotes_stale:
+                    hit[t] = _quotes_stale[t]   # serve last known-good on fetch failure
+                else:
+                    hit[t] = row                 # genuinely first time and failed — show null
+        except Exception:
+            for t in miss:
+                hit[t] = _quotes_stale[t] if t in _quotes_stale else \
+                          {"ticker": t, "price": None, "pct": None,
+                           "day_high": None, "day_low": None, "volume": None,
+                           "week_high": None, "week_low": None}
 
-    out = [hit.get(t, {"ticker": t, "price": None, "pct": None,
-                       "day_high": None, "day_low": None, "volume": None,
-                       "week_high": None, "week_low": None})
+    # Kick off background 52W H/L refresh for tickers not yet in _52w_cache
+    if miss_52w:
+        threading.Thread(target=_fetch_52w_batch, args=(miss_52w,), daemon=True).start()
+
+    out = [hit.get(t, _quotes_stale.get(t) or {"ticker": t, "price": None, "pct": None,
+                                                "day_high": None, "day_low": None, "volume": None,
+                                                "week_high": None, "week_low": None})
            for t in tickers]
     _log_quotes("quotes", out, n_fetched=len(miss))
     return out
@@ -408,7 +450,7 @@ def _fetch_premarket(tickers: tuple) -> list[dict]:
                 miss.append(t)
 
     if miss:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
             future_map = {ex.submit(_single_ticker_premarket, t): t for t in miss}
             for f in concurrent.futures.as_completed(future_map):
                 t = future_map[f]
@@ -561,16 +603,18 @@ def _portfolio_rows(account: str) -> list[dict]:
         shares = pos["shares"]
         avg_cost = pos["avg_cost"]
         total_cost = pos.get("total_cost")
+        cost_basis = total_cost if total_cost is not None else avg_cost * shares
         if price is not None and pct is not None:
             prev_close = price / (1 + pct / 100)
             per_share = price - prev_close
             today_gain = per_share * shares
-            cost_basis = total_cost if total_cost is not None else avg_cost * shares
+        else:
+            prev_close = per_share = today_gain = None
+        if price is not None:
             unreal_gain = price * shares - cost_basis
             unreal_pct = unreal_gain / cost_basis * 100 if cost_basis else 0.0
         else:
-            prev_close = per_share = today_gain = unreal_gain = unreal_pct = None
-        cost_basis = (total_cost if total_cost is not None else avg_cost * shares)
+            unreal_gain = unreal_pct = None
         ytd_start = ytd_map.get(ticker)
         if price is not None and ytd_start is not None and ytd_start > 0:
             ytd_gain = (price - ytd_start) * shares
@@ -642,10 +686,11 @@ def health():
 
 
 class SettingsBody(BaseModel):
-    use_mock:  Optional[bool] = None
-    col_vis:   Optional[list] = None   # legacy flat; kept for migration reads
-    col_order: Optional[list] = None   # legacy flat; kept for migration reads
-    pnl_cols:  Optional[dict] = None   # { account_key: { vis: [...], order: [...] } }
+    use_mock:           Optional[bool] = None
+    col_vis:            Optional[list] = None   # legacy flat; kept for migration reads
+    col_order:          Optional[list] = None   # legacy flat; kept for migration reads
+    pnl_cols:           Optional[dict] = None   # { account_key: { vis: [...], order: [...] } }
+    protected_accounts: Optional[list] = None   # list of account keys that cannot be deleted
 
 
 @app.get("/api/settings")
@@ -666,6 +711,8 @@ def put_settings(body: SettingsBody):
         existing = s.get("pnl_cols", {})
         existing.update(body.pnl_cols)
         s["pnl_cols"] = existing
+    if body.protected_accounts is not None:
+        s["protected_accounts"] = body.protected_accounts
     save_settings(s)
     return s
 
@@ -813,6 +860,20 @@ class TickerBody(BaseModel):
     ticker: str
 
 
+@app.put("/api/groups/{group_name}/pin")
+def toggle_group_pin(group_name: str):
+    _require_real_mode()
+    groups, portfolio, pinned, markets = load_config()
+    if group_name not in groups:
+        raise HTTPException(404, "group not found")
+    if group_name in pinned:
+        pinned = [p for p in pinned if p != group_name]
+    else:
+        pinned = pinned + [group_name]
+    save_config(groups, portfolio, pinned, markets)
+    return _groups_response(groups, pinned, markets)
+
+
 @app.post("/api/groups/{group_name}/tickers")
 def add_group_ticker(group_name: str, body: TickerBody):
     _require_real_mode()
@@ -931,6 +992,19 @@ def delete_position(account: str, ticker: str):
     return {"ok": True}
 
 
+@app.put("/api/portfolio/accounts/order")
+def reorder_accounts(body: OrderBody):
+    _require_real_mode()
+    groups, portfolio, pinned, markets = load_config()
+    existing = set(portfolio.keys())
+    new_order = [a for a in body.order if a in existing]
+    if set(new_order) != existing:
+        raise HTTPException(400, "order must contain exactly the same accounts")
+    portfolio = {a: portfolio[a] for a in new_order}
+    save_config(groups, portfolio, pinned, markets)
+    return {"accounts": list(portfolio.keys())}
+
+
 @app.put("/api/portfolio/{account}/order")
 def reorder_portfolio(account: str, body: OrderBody):
     _require_real_mode()
@@ -945,6 +1019,329 @@ def reorder_portfolio(account: str, body: OrderBody):
     portfolio[account]["positions"] = {t: positions[t] for t in new_order}
     save_config(groups, portfolio)
     return {"order": list(portfolio[account]["positions"].keys())}
+
+
+# ── Routes: account CRUD ───────────────────────────────────────────────────────
+class AccountBody(BaseModel):
+    name: str
+    currency: str = "USD"   # "USD" or "TWD"
+
+
+class AccountRenameBody(BaseModel):
+    new_name: str
+
+
+@app.post("/api/portfolio/accounts")
+def create_account(body: AccountBody):
+    _require_real_mode()
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "account name required")
+    currency = body.currency if body.currency in ("USD", "TWD") else "USD"
+    groups, portfolio, pinned, markets = load_config()
+    if name in portfolio:
+        raise HTTPException(409, "account already exists")
+    portfolio[name] = {"currency": currency, "positions": {}}
+    save_config(groups, portfolio, pinned, markets)
+    return {"accounts": list(portfolio.keys()), "account": name, "currency": currency}
+
+
+@app.put("/api/portfolio/accounts/{account}/rename")
+def rename_account(account: str, body: AccountRenameBody):
+    _require_real_mode()
+    new_name = body.new_name.strip()
+    if not new_name:
+        raise HTTPException(400, "new name required")
+    groups, portfolio, pinned, markets = load_config()
+    if account not in portfolio:
+        raise HTTPException(404, "account not found")
+    if new_name in portfolio and new_name != account:
+        raise HTTPException(409, "account name already exists")
+    # Rebuild portfolio with the renamed key preserving insertion order
+    portfolio = {(new_name if k == account else k): v for k, v in portfolio.items()}
+    save_config(groups, portfolio, pinned, markets)
+    return {"accounts": list(portfolio.keys())}
+
+
+@app.delete("/api/portfolio/accounts/{account}")
+def delete_account(account: str):
+    _require_real_mode()
+    protected = load_settings().get("protected_accounts", [])
+    if account in protected:
+        raise HTTPException(403, "account is protected from deletion")
+    groups, portfolio, pinned, markets = load_config()
+    if account not in portfolio:
+        raise HTTPException(404, "account not found")
+    positions = portfolio[account].get("positions", {})
+    if positions:
+        raise HTTPException(400, "cannot delete account with positions; remove all positions first")
+    del portfolio[account]
+    save_config(groups, portfolio, pinned, markets)
+    return {"accounts": list(portfolio.keys())}
+
+
+# ── Routes: history (K-line) ───────────────────────────────────────────────────
+_history_cache: TTLCache = TTLCache(maxsize=200, ttl=60)
+_history_cache_lock = threading.Lock()
+_trading_days_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
+_trading_days_lock = threading.Lock()
+
+PERIOD_MAP = {
+    "intra": ("1d",  "1m"),   # regular session only (no pre/post)
+    "1d":    ("1d",  "1m"),   # full day including pre/post
+    "2d":    (None,  "1m"),   # last 2 trading days, 1m, prepost — fetched dynamically
+    "3d":    (None,  "1m"),
+    "4d":    (None,  "1m"),
+    "5d":    (None,  "1m"),
+    "1w":    ("5d",  "15m"),
+    "1m":    ("1mo", "1d"),
+    "3m":    ("3mo", "1d"),
+    "ytd":   ("ytd", "1d"),
+    "1y":    ("1y",  "1d"),
+    "5y":    ("5y",  "1wk"),
+    "all":   ("max", "1mo"),
+}
+
+
+@app.get("/api/trading-days")
+def get_trading_days(count: int = 10, market: str = "US"):
+    cache_key = f"{market}:{count}"
+    with _trading_days_lock:
+        if cache_key in _trading_days_cache:
+            return _trading_days_cache[cache_key]
+    ref = "SPY" if market != "TW" else "0050.TW"
+    try:
+        df = yf.download(ref, period="1mo", interval="1d", progress=False, auto_adjust=True)
+        if df.empty:
+            return {"days": []}
+        days = [ts.strftime("%Y-%m-%d") for ts in df.index[-count:]]
+        days.reverse()  # most recent first
+        result = {"days": days}
+        with _trading_days_lock:
+            _trading_days_cache[cache_key] = result
+        return result
+    except Exception:
+        return {"days": []}
+
+
+@app.get("/api/history/{ticker}")
+def get_history(ticker: str, period: str = "1y", date: Optional[str] = None):
+    ticker = ticker.upper()
+    period = period.lower()
+    if period not in PERIOD_MAP:
+        raise HTTPException(400, f"invalid period; valid: {', '.join(PERIOD_MAP)}")
+    yf_period, interval = PERIOD_MAP[period]
+    cache_key = f"{ticker}:{period}:{date or ''}"
+    with _history_cache_lock:
+        if cache_key in _history_cache:
+            return _history_cache[cache_key]
+    fetch_ticker = ticker
+    if not any(ticker.endswith(s) for s in (".TW", ".TWO", "-USD", "-USDT")):
+        if ticker in TW_EXCHANGE:
+            fetch_ticker = ticker + TW_EXCHANGE[ticker]
+    try:
+        # ── Choose fetch strategy ─────────────────────────────────────────────
+        if period == "intra" and date:
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(400, "invalid date; expected YYYY-MM-DD")
+            df = yf.download(fetch_ticker,
+                             start=dt.strftime("%Y-%m-%d"),
+                             end=(dt + timedelta(days=1)).strftime("%Y-%m-%d"),
+                             interval="1m", progress=False, auto_adjust=True, prepost=False)
+        elif period in ("2d", "3d", "4d", "5d"):
+            n = int(period[0])
+            # yfinance 1m data is limited to ~7 calendar days; fetch 5d then trim
+            df_full = yf.download(fetch_ticker, period="5d", interval="1m",
+                                  progress=False, auto_adjust=True, prepost=True)
+            if df_full.empty:
+                return []
+            if hasattr(df_full.columns, "levels"):
+                df_full = df_full.droplevel(1, axis=1)
+            et_tz = pytz.timezone("America/New_York")
+            unique_days = sorted({ts.astimezone(et_tz).strftime("%Y-%m-%d") for ts in df_full.index})
+            if len(unique_days) < n:
+                return []
+            cutoff = unique_days[-n]
+            df = df_full.loc[[ts for ts in df_full.index
+                               if ts.astimezone(et_tz).strftime("%Y-%m-%d") >= cutoff]]
+        else:
+            prepost = period == "1d"
+            df = yf.download(fetch_ticker, period=yf_period, interval=interval,
+                             progress=False, auto_adjust=True, prepost=prepost)
+
+        if df is None or df.empty:
+            return []
+        if hasattr(df.columns, "levels"):
+            df = df.droplevel(1, axis=1)
+
+        # ── Build bars ────────────────────────────────────────────────────────
+        bars = []
+        for ts, row in df.iterrows():
+            bars.append({
+                "t": int(ts.timestamp() * 1000),
+                "o": float(row["Open"])   if row["Open"]   == row["Open"]   else None,
+                "h": float(row["High"])   if row["High"]   == row["High"]   else None,
+                "l": float(row["Low"])    if row["Low"]    == row["Low"]    else None,
+                "c": float(row["Close"])  if row["Close"]  == row["Close"]  else None,
+                "v": float(row["Volume"]) if "Volume" in row and row["Volume"] == row["Volume"] else None,
+            })
+
+        result = {"ticker": ticker, "period": period, "interval": interval, "bars": bars}
+
+        # ── Session boundaries (pre/post periods only) ────────────────────────
+        if period in ("1d", "2d", "3d", "4d", "5d"):
+            et_tz = pytz.timezone("America/New_York")
+            boundaries = []
+            cur_day = None
+            day_open = day_close = None
+            for ts in df.index:
+                ts_et = ts.astimezone(et_tz)
+                d_str = ts_et.strftime("%Y-%m-%d")
+                t = ts_et.time()
+                ms = int(ts.timestamp() * 1000)
+                if d_str != cur_day:
+                    if cur_day is not None and day_open is not None:
+                        entry = {"open": day_open}
+                        if day_close is not None:
+                            entry["close"] = day_close
+                        boundaries.append(entry)
+                    cur_day, day_open, day_close = d_str, None, None
+                if day_open is None and dtime(9, 30) <= t < dtime(16, 0):
+                    day_open = ms
+                if day_open is not None and day_close is None and t >= dtime(16, 0):
+                    day_close = ms
+            if cur_day is not None and day_open is not None:
+                entry = {"open": day_open}
+                if day_close is not None:
+                    entry["close"] = day_close
+                boundaries.append(entry)
+            if boundaries:
+                result["session_boundaries"] = boundaries
+
+        with _history_cache_lock:
+            _history_cache[cache_key] = result
+        return result
+    except Exception:
+        return []
+
+
+# ── Routes: market overview ─────────────────────────────────────────────────────
+_POPULAR_TW = [
+    "2330", "2317", "2454", "2308", "2412", "2882", "2884", "6505", "3711",
+    "2891", "2886", "2881", "2303", "2609", "1301", "1303", "2002", "2395",
+    "00878", "00919", "0050", "0056", "00929", "00713",
+]
+_market_cache: TTLCache = TTLCache(maxsize=10, ttl=60)
+_market_cache_lock = threading.Lock()
+
+
+def _fetch_screener(scr_id: str, count: int = 25) -> list:
+    url = (
+        "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
+        f"?formatted=false&scrIds={scr_id}&count={count}&start=0"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read())
+    quotes = data["finance"]["result"][0]["quotes"]
+    rows = []
+    for q in quotes:
+        ticker = q.get("symbol")
+        price = q.get("regularMarketPrice")
+        pct = q.get("regularMarketChangePercent")
+        vol = q.get("regularMarketVolume")
+        name = q.get("shortName", "")
+        if ticker and price is not None and pct is not None:
+            rows.append({"ticker": ticker, "name": name, "price": price, "pct": pct, "volume": vol})
+    return rows
+
+
+@app.get("/api/market/overview")
+def market_overview():
+    with _market_cache_lock:
+        if "us" in _market_cache:
+            return _market_cache["us"]
+    try:
+        gainers = _fetch_screener("day_gainers")
+        losers  = _fetch_screener("day_losers")
+        actives = _fetch_screener("most_actives")
+        result = {"gainers": gainers, "losers": losers, "actives": actives}
+        with _market_cache_lock:
+            _market_cache["us"] = result
+        return result
+    except Exception:
+        return {"gainers": [], "losers": [], "actives": []}
+
+
+@app.get("/api/market/tw-overview")
+def market_tw_overview():
+    with _market_cache_lock:
+        if "tw" in _market_cache:
+            return _market_cache["tw"]
+    # resolve bare TW codes
+    resolved = [b + TW_EXCHANGE.get(b, ".TW") for b in _POPULAR_TW]
+    try:
+        df = yf.download(resolved, period="5d", interval="1d", progress=False, auto_adjust=False)
+        rows = []
+        if not df.empty:
+            is_multi = hasattr(df.columns, "levels")
+            for bare, full in zip(_POPULAR_TW, resolved):
+                try:
+                    closes = df["Close"][full].dropna() if is_multi else df["Close"].dropna()
+                    vols   = df["Volume"][full].dropna() if is_multi else df["Volume"].dropna()
+                    if len(closes) >= 2:
+                        price = float(closes.iloc[-1])
+                        pct = (float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100
+                        vol = float(vols.iloc[-1]) if len(vols) else None
+                        name = TW_NAMES.get(bare, "")
+                        rows.append({"ticker": bare, "name": name, "price": price, "pct": pct, "volume": vol})
+                except Exception:
+                    pass
+        result = {"stocks": rows}
+        with _market_cache_lock:
+            _market_cache["tw"] = result
+        return result
+    except Exception:
+        return {"stocks": []}
+
+
+# ── Routes: crypto ─────────────────────────────────────────────────────────────
+_DEFAULT_CRYPTO = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
+                   "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD",
+                   "MATIC-USD", "UNI-USD", "LTC-USD", "ATOM-USD", "FIL-USD"]
+_crypto_cache: TTLCache = TTLCache(maxsize=10, ttl=60)
+_crypto_cache_lock = threading.Lock()
+
+
+@app.get("/api/crypto/quotes")
+def crypto_quotes():
+    with _crypto_cache_lock:
+        if "quotes" in _crypto_cache:
+            return _crypto_cache["quotes"]
+    try:
+        df = yf.download(_DEFAULT_CRYPTO, period="5d", interval="1d", progress=False, auto_adjust=False)
+        rows = []
+        if not df.empty:
+            is_multi = hasattr(df.columns, "levels")
+            for t in _DEFAULT_CRYPTO:
+                try:
+                    closes = df["Close"][t].dropna() if is_multi else df["Close"].dropna()
+                    vols   = df["Volume"][t].dropna() if is_multi else df["Volume"].dropna()
+                    if len(closes) >= 2:
+                        price = float(closes.iloc[-1])
+                        pct = (float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100
+                        vol = float(vols.iloc[-1]) if len(vols) else None
+                        rows.append({"ticker": t, "price": price, "pct": pct, "volume": vol})
+                except Exception:
+                    pass
+        result = {"coins": rows}
+        with _crypto_cache_lock:
+            _crypto_cache["quotes"] = result
+        return result
+    except Exception:
+        return {"coins": []}
 
 
 # ── Routes: validation ─────────────────────────────────────────────────────────

@@ -69,6 +69,9 @@ export const api = {
   reorderGroups: (order: string[]) =>
     put<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>("/api/groups/order", { order }),
 
+  toggleGroupPin: (group: string) =>
+    put<{ groups: Groups; pinned: string[]; markets: Record<string, Market> }>(`/api/groups/${encodeURIComponent(group)}/pin`, {}),
+
   addGroupTicker: (group: string, ticker: string) =>
     post<{ tickers: string[] }>(`/api/groups/${encodeURIComponent(group)}/tickers`, { ticker }),
 
@@ -115,10 +118,49 @@ export const api = {
     get<{ exists: boolean; resolved: string | null }>(`/api/validate/tw/${encodeURIComponent(ticker)}`),
 
   getSettings: () =>
-    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[] }> }>("/api/settings"),
+    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[] }>("/api/settings"),
 
-  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[] }> }) =>
+  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[] }) =>
     put<{ use_mock: boolean }>("/api/settings", patch),
+
+  // Account CRUD
+  createAccount: (name: string, currency: "USD" | "TWD") =>
+    post<{ accounts: string[]; account: string; currency: string }>("/api/portfolio/accounts", { name, currency }),
+
+  renameAccount: (account: string, new_name: string) =>
+    put<{ accounts: string[] }>(`/api/portfolio/accounts/${encodeURIComponent(account)}/rename`, { new_name }),
+
+  deleteAccount: (account: string) =>
+    del<{ accounts: string[] }>(`/api/portfolio/accounts/${encodeURIComponent(account)}`),
+
+  reorderAccounts: (order: string[]) =>
+    put<{ accounts: string[] }>("/api/portfolio/accounts/order", { order }),
+
+  // History (K-line)
+  history: (ticker: string, period: string, date?: string) =>
+    get<{
+      ticker: string; period: string; interval: string;
+      bars: { t: number; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null }[];
+      session_boundaries?: { open: number; close?: number }[];
+    }>(`/api/history/${encodeURIComponent(ticker)}?period=${period}${date ? `&date=${date}` : ""}`),
+
+  tradingDays: (count = 10, market: Market = "US") =>
+    get<{ days: string[] }>(`/api/trading-days?count=${count}&market=${market}`),
+
+  // Market overview
+  marketOverview: () =>
+    get<{
+      gainers: { ticker: string; name: string; price: number; pct: number; volume: number | null }[];
+      losers:  { ticker: string; name: string; price: number; pct: number; volume: number | null }[];
+      actives: { ticker: string; name: string; price: number; pct: number; volume: number | null }[];
+    }>("/api/market/overview"),
+
+  twMarketOverview: () =>
+    get<{ stocks: { ticker: string; name: string; price: number; pct: number; volume: number | null }[] }>("/api/market/tw-overview"),
+
+  // Crypto
+  cryptoQuotes: () =>
+    get<{ coins: { ticker: string; price: number; pct: number; volume: number | null }[] }>("/api/crypto/quotes"),
 };
 
 // Convenience: format number with sign

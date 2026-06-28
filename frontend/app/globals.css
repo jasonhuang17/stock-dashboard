@@ -47,7 +47,7 @@ html, body {
 
 /* ── Stock card ─────────────────────────────────────────────────────────────── */
 .stock-card {
-  background: linear-gradient(135deg, rgba(0,61,115,0.55), rgba(8,120,164,0.12));
+  background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 10px;
   padding: 14px 16px;
@@ -118,6 +118,7 @@ html, body {
   border-bottom: none;
   padding-top: 8px;
 }
+
 
 /* ── Summary bar ────────────────────────────────────────────────────────────── */
 .summary-bar {

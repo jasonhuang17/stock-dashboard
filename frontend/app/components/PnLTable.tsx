@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import type { PortfolioRow, SortState } from "@/lib/types";
 import { api, fmtMoney, fmtPct } from "@/lib/api";
 import {
@@ -19,7 +20,9 @@ interface ColDef {
   fmt: (row: PortfolioRow) => string;
 }
 
-const ALL_ACCOUNTS = ["美股複委託（台幣帳戶）", "美股複委託（美金帳戶）", "台股帳戶"];
+// Populated dynamically by the parent component; fallback to the legacy 3 accounts
+let _allAccountKeys: string[] = ["美股複委託（台幣帳戶）", "美股複委託（美金帳戶）", "台股帳戶"];
+export function setAllAccountKeys(keys: string[]) { _allAccountKeys = keys; }
 const SYNC_EVENT = "pnl-cols-sync";
 
 // Only ticker is always shown; everything else is optional
@@ -114,8 +117,9 @@ function sortRows(rows: PortfolioRow[], ss: SortState): PortfolioRow[] {
   });
 }
 
-function SortableColRow({ id, label, checked, onToggle }: {
+function SortableColRow({ id, label, checked, onToggle, hasDivider, onToggleDivider }: {
   id: string; label: string; checked: boolean; onToggle: (id: string) => void;
+  hasDivider: boolean; onToggleDivider: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
@@ -132,6 +136,13 @@ function SortableColRow({ id, label, checked, onToggle }: {
         <input type="checkbox" checked={checked} onChange={() => onToggle(id)} style={{ accentColor: "var(--teal)" }} />
         {label}
       </label>
+      {checked && (
+        <button onClick={() => onToggleDivider(id)} title="右側分隔線"
+          style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", opacity: hasDivider ? 1 : 0.35,
+            color: hasDivider ? "var(--teal)" : "var(--dim)", fontSize: "0.78rem" }}>
+          │
+        </button>
+      )}
     </div>
   );
 }
@@ -140,15 +151,17 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [ss, setSS]           = useState<SortState>({ col: null, dir: "desc" });
   const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
+  const [dividers, setDividers] = useState<Set<string>>(new Set()); // column IDs after which a divider line is shown
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getSettings().then(s => {
-      const acct = s.pnl_cols?.[account];
+      const acct = s.pnl_cols?.[account] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined;
       if (acct) {
-        setOptCols(new Set(acct.vis));
-        setColOrder(mergeOrder(acct.order));
+        if (acct.vis)      setOptCols(new Set(acct.vis));
+        if (acct.order)    setColOrder(mergeOrder(acct.order));
+        if (acct.dividers) setDividers(new Set(acct.dividers));
       } else if (s.col_vis || s.col_order) {
         // migrate from old flat format
         if (s.col_vis)   setOptCols(new Set(s.col_vis));
@@ -157,10 +170,11 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     }).catch(() => {});
 
     function onSync(e: Event) {
-      const { target, vis, order } = (e as CustomEvent<{ target: string; vis: string[]; order: string[] }>).detail;
+      const { target, vis, order, dividers: divs } = (e as CustomEvent<{ target: string; vis: string[]; order: string[]; dividers?: string[] }>).detail;
       if (target !== account) return;
       setOptCols(new Set(vis));
       setColOrder(mergeOrder(order));
+      if (divs) setDividers(new Set(divs));
     }
     window.addEventListener(SYNC_EVENT, onSync);
     return () => window.removeEventListener(SYNC_EVENT, onSync);
@@ -178,15 +192,24 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  function savePrefs(vis: Set<string>, order: OptColId[]) {
-    api.setSettings({ pnl_cols: { [account]: { vis: [...vis], order } } }).catch(() => {});
+  function savePrefs(vis: Set<string>, order: OptColId[], divs: Set<string>) {
+    api.setSettings({ pnl_cols: { [account]: { vis: [...vis], order, dividers: [...divs] } } }).catch(() => {});
   }
 
   function toggleOptCol(id: string) {
     setOptCols(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      savePrefs(next, colOrder);
+      savePrefs(next, colOrder, dividers);
+      return next;
+    });
+  }
+
+  function toggleDivider(id: string) {
+    setDividers(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      savePrefs(optCols, colOrder, next);
       return next;
     });
   }
@@ -196,7 +219,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     if (!over || active.id === over.id) return;
     setColOrder(prev => {
       const next = arrayMove(prev, prev.indexOf(active.id as OptColId), prev.indexOf(over.id as OptColId));
-      savePrefs(optCols, next);
+      savePrefs(optCols, next, dividers);
       return next;
     });
   }
@@ -204,8 +227,9 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   function applyTo(target: string) {
     const vis = [...optCols];
     const order = colOrder;
-    api.setSettings({ pnl_cols: { [target]: { vis, order } } }).catch(() => {});
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target, vis, order } }));
+    const divs = [...dividers];
+    api.setSettings({ pnl_cols: { [target]: { vis, order, dividers: divs } } }).catch(() => {});
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target, vis, order, dividers: divs } }));
   }
 
   const cols   = buildCols(currency, optCols, colOrder);
@@ -223,9 +247,25 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const totalToday  = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
   const totalCost   = rows.reduce((s, r) => s + r.cost_basis, 0);
-  const totalYtd    = rows.reduce((s, r) => s + (r.ytd_gain   ?? 0), 0);
   const hasData     = rows.some(r => r.price !== null);
-  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis", "ytd_gain"].includes(c.key));
+  const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis"].includes(c.key));
+
+  // Divider line: borderRight on the divider column with extra paddingRight so the line sits
+  // closer to the right column (more space on the left side of the line).
+  const divStyle = (idx: number): React.CSSProperties => {
+    const styles: React.CSSProperties = {};
+    // This column owns a divider: borderRight + paddingRight
+    if (dividers.has(cols[idx].key)) {
+      const pr = cols[idx].key === "ticker" ? "5px" : "24px";
+      styles.borderRight = "2px solid rgba(30,207,214,0.4)";
+      styles.paddingRight = pr;
+    }
+    // Previous column has a non-ticker divider: collapse left padding to 0
+    if (idx > 0 && dividers.has(cols[idx - 1].key) && cols[idx - 1].key !== "ticker") {
+      styles.paddingLeft = "0px";
+    }
+    return styles;
+  };
 
   return (
     <div>
@@ -242,19 +282,33 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}>
             <div style={{ fontSize: "0.65rem", color: "var(--dim)", letterSpacing: "0.08em", marginBottom: 8 }}>顯示欄位（拖曳調順序）</div>
+            {/* Ticker is always first and non-removable; only divider is togglable */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+              <span style={{ color: "rgba(100,120,140,0.3)", fontSize: 13, lineHeight: 1, userSelect: "none" }}>☰</span>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, fontSize: "0.78rem", color: "var(--dim)" }}>
+                <input type="checkbox" checked disabled style={{ accentColor: "var(--teal)", opacity: 0.45 }} />
+                代號
+              </label>
+              <button onClick={() => toggleDivider("ticker")} title="右側分隔線"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+                  opacity: dividers.has("ticker") ? 1 : 0.35,
+                  color: dividers.has("ticker") ? "var(--teal)" : "var(--dim)", fontSize: "0.78rem" }}>
+                │
+              </button>
+            </div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
               <SortableContext items={colOrder} strategy={verticalListSortingStrategy}>
                 {colOrder.map(id => {
                   const meta = OPT_COLS.find(c => c.id === id);
                   if (!meta) return null;
-                  return <SortableColRow key={id} id={id} label={meta.label} checked={optCols.has(id)} onToggle={toggleOptCol} />;
+                  return <SortableColRow key={id} id={id} label={meta.label} checked={optCols.has(id)} onToggle={toggleOptCol} hasDivider={dividers.has(id)} onToggleDivider={toggleDivider} />;
                 })}
               </SortableContext>
             </DndContext>
             {account && (
               <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginBottom: 2 }}>套用至</div>
-                {ALL_ACCOUNTS.filter(a => a !== account).map(a => (
+                {_allAccountKeys.filter(a => a !== account).map(a => (
                   <button key={a} className="dash-btn dash-btn-sm" onClick={() => applyTo(a)} style={{ fontSize: "0.65rem", textAlign: "left" }}>
                     {a}
                   </button>
@@ -269,14 +323,14 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
         <table className="pnl-table">
           <thead>
             <tr>
-              {cols.map(c => {
+              {cols.map((c, idx) => {
                 const sortable = c.key !== "ticker";
                 return (
                   <th
                     key={c.key}
                     className={ss.col === c.key ? "active" : ""}
                     onClick={() => sortable && onHeaderClick(c.key)}
-                    style={{ cursor: sortable ? "pointer" : "default" }}
+                    style={{ cursor: sortable ? "pointer" : "default", ...divStyle(idx) }}
                   >
                     {c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
@@ -287,7 +341,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
           <tbody>
             {sorted.map(row => (
               <tr key={row.ticker}>
-                {cols.map(c => {
+                {cols.map((c, idx) => {
                   const val = row[c.key] as number | null;
                   const needsColor = ["per_share", "pct", "today_gain", "unreal_gain", "ytd_gain", "ytd_pct"].includes(c.key);
                   const isHigh     = c.key === "day_high";
@@ -298,13 +352,18 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                   return (
                     <td key={c.key}
                       className={needsColor ? colorOf(val) : ""}
-                      style={isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : isWeekHigh ? { color: "#FB923C" } : isWeekLow ? { color: "#60A5FA" } : undefined}
+                      style={{
+                        ...(isUserData ? { color: "var(--gold)" } : isHigh ? { color: "#A78BFA" } : isLow ? { color: "#5BB8D4" } : isWeekHigh ? { color: "#FB923C" } : isWeekLow ? { color: "#60A5FA" } : {}),
+                        ...divStyle(idx),
+                      }}
                     >
-                      {c.key === "ticker" && row.name ? (
-                        <div>
+                      {c.key === "ticker" ? (
+                        <Link href={`/stock/${encodeURIComponent(row.ticker)}`}
+                          style={{ color: "var(--teal)", textDecoration: "none", fontWeight: 700 }}
+                          title="查看K線圖">
                           <div>{row.ticker}</div>
-                          <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400, letterSpacing: 0 }}>{row.name}</div>
-                        </div>
+                          {row.name && <div style={{ color: "var(--dim)", fontSize: "0.68rem", fontWeight: 400, letterSpacing: 0 }}>{row.name}</div>}
+                        </Link>
                       ) : c.key === "day_high" && row.day_high !== null && row.prev_close !== null ? (
                         <div>
                           <div>{c.fmt(row)}</div>
@@ -329,13 +388,13 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
           {showTfoot && (
             <tfoot>
               <tr style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                {cols.map(c => {
-                  if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400 }}>合計</td>;
-                  if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)}>{fmtMoney(totalToday, currency)}</td>;
-                  if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)}>{fmtMoney(totalUnreal, currency)}</td>;
-                  if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)" }}>{fmtMoney(totalCost, currency)}</td>;
-                  if (c.key === "ytd_gain")    return <td key="ytd_gain"    className={colorOf(totalYtd)}>{fmtMoney(totalYtd, currency)}</td>;
-                  return <td key={c.key} />;
+                {cols.map((c, idx) => {
+                  const ds = divStyle(idx);
+                  if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400, ...ds }}>合計</td>;
+                  if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}</td>;
+                  if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}</td>;
+                  if (c.key === "cost_basis")  return <td key="cost_basis"  style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalCost, currency)}</td>;
+                  return <td key={c.key} style={ds} />;
                 })}
               </tr>
             </tfoot>

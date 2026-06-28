@@ -4,6 +4,9 @@ import { api } from "@/lib/api";
 import type { Groups, MarketStatus, Market } from "@/lib/types";
 import { GroupTab } from "./components/GroupTab";
 import { PortfolioTab } from "./components/PortfolioTab";
+import { MarketTab } from "./components/MarketTab";
+import { CryptoTab } from "./components/CryptoTab";
+import { ThemeSelector } from "./components/ThemeSelector";
 
 const REFRESH_INTERVAL = 30;
 
@@ -114,6 +117,15 @@ export default function Dashboard() {
     } catch { /* silent */ }
   }
 
+  async function handleToggleGroupPin(name: string) {
+    try {
+      const res = await api.toggleGroupPin(name);
+      setGroups(res.groups);
+      setPinned(res.pinned);
+      if (res.markets) setMarkets(res.markets);
+    } catch { /* silent */ }
+  }
+
   async function handleRenameGroup() {
     if (!renamingGroup) return;
     const newName = renameValue.trim();
@@ -145,7 +157,10 @@ export default function Dashboard() {
   }
 
   const groupNames = Object.keys(groups);
-  const tabs = ["💼 持倉", ...groupNames];
+  const FIXED_TABS_END = ["📈 市場", "₿ 加密貨幣"];
+  const marketTabIdx = groupNames.length + 1;
+  const cryptoTabIdx = groupNames.length + 2;
+  const tabs = ["💼 持倉", ...groupNames, ...FIXED_TABS_END];
 
   useEffect(() => {
     const saved = parseInt(sessionStorage.getItem("dashboard-tab") ?? "0", 10) || 0;
@@ -181,6 +196,7 @@ export default function Dashboard() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ThemeSelector />
           <button onClick={handleToggleMock} style={{ fontFamily: "Courier New", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.08em", padding: "3px 10px", borderRadius: 20, border: `1px solid ${useMock ? "rgba(237,209,112,0.6)" : "rgba(8,120,164,0.4)"}`, background: useMock ? "rgba(237,209,112,0.12)" : "transparent", color: useMock ? "var(--gold)" : "var(--dim)", cursor: "pointer" }}>
             {useMock ? "◈ DEMO" : "DEMO"}
           </button>
@@ -188,12 +204,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Demo mode banner */}
+      {/* Demo mode banner — sticky, taller, consistent with header */}
       {useMock && (
-        <div style={{ margin: "0 -2rem", padding: "5px 2rem", background: "rgba(237,209,112,0.10)", borderBottom: "1px solid rgba(237,209,112,0.35)", display: "flex", alignItems: "center", gap: 10, fontSize: "0.72rem", fontFamily: "Courier New", letterSpacing: "0.06em" }}>
-          <span style={{ color: "var(--gold)", fontWeight: 700 }}>⚡ DEMO MODE</span>
-          <span style={{ color: "rgba(237,209,112,0.55)" }}>— showing sample data, not your real portfolio</span>
-          <button onClick={handleToggleMock} style={{ marginLeft: "auto", color: "rgba(237,209,112,0.6)", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontFamily: "Courier New" }}>exit demo ×</button>
+        <div style={{ position: "sticky", top: 53, zIndex: 49, margin: "0 -2rem", padding: "10px 2rem", background: "rgba(30,15,0,0.95)", borderBottom: "1px solid rgba(237,209,112,0.45)", display: "flex", alignItems: "center", gap: 12, fontSize: "0.76rem", fontFamily: "Courier New", letterSpacing: "0.06em", backdropFilter: "blur(8px)" }}>
+          <span style={{ color: "var(--gold)", fontWeight: 700, fontSize: "0.82rem" }}>⚡ DEMO MODE</span>
+          <span style={{ color: "rgba(237,209,112,0.60)" }}>— showing sample data, not your real portfolio</span>
+          <button onClick={handleToggleMock} style={{ marginLeft: "auto", color: "rgba(237,209,112,0.7)", background: "none", border: "1px solid rgba(237,209,112,0.35)", borderRadius: 4, cursor: "pointer", fontSize: "0.72rem", fontFamily: "Courier New", padding: "2px 8px" }}>exit demo ×</button>
         </div>
       )}
 
@@ -269,7 +285,6 @@ export default function Dashboard() {
                   className={`tab-btn${isActive ? " active" : ""}`}
                   onClick={() => handleSetTab(tabIdx)}
                   onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
-                  style={!isPinned ? { paddingRight: "1.5rem" } : undefined}
                   title={useMock ? "exit demo to edit" : "double-click to rename"}
                 >
                   {g}<span style={{ fontSize: "0.6rem", opacity: 0.55, marginLeft: 3 }}>{markets[g] === "TW" ? "🇹🇼" : "🇺🇸"}</span>
@@ -278,7 +293,7 @@ export default function Dashboard() {
               {!isPinned && !isRenaming && !useMock && (
                 <span
                   onClick={e => { e.stopPropagation(); handleDeleteGroup(g); }}
-                  style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", fontSize: "0.65rem", color: "var(--dim)", cursor: "pointer", lineHeight: 1, padding: "2px 3px" }}
+                  style={{ fontSize: "0.65rem", color: "var(--dim)", cursor: "pointer", lineHeight: 1, padding: "2px 3px" }}
                   title="Delete group"
                 >×</span>
               )}
@@ -314,6 +329,19 @@ export default function Dashboard() {
             <button className="dash-btn dash-btn-sm" onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupMarket("US"); }}>cancel</button>
           </div>
         )}
+
+        {/* Divider before fixed tabs */}
+        {groupNames.length > 0 && (
+          <span style={{ width: 1, height: 18, background: "rgba(8,120,164,0.35)", margin: "0 4px", flexShrink: 0 }} />
+        )}
+
+        {/* Fixed tabs: 市場 + 加密貨幣 */}
+        <button className={`tab-btn${tab === marketTabIdx ? " active" : ""}`} onClick={() => handleSetTab(marketTabIdx)}>
+          📈 市場
+        </button>
+        <button className={`tab-btn${tab === cryptoTabIdx ? " active" : ""}`} onClick={() => handleSetTab(cryptoTabIdx)}>
+          ₿ 加密貨幣
+        </button>
       </div>
 
       {/* Tab content — gated on settingsLoaded to prevent useMock=false flash on page refresh */}
@@ -327,10 +355,14 @@ export default function Dashboard() {
             market={markets[g] ?? "US"}
             refreshKey={refreshKey}
             useMock={useMock}
+            isPinned={pinned.includes(g)}
             onTickersChange={tickers => setGroups(prev => ({ ...prev, [g]: tickers }))}
+            onTogglePin={() => handleToggleGroupPin(g)}
           />
         )
       ))}
+      {settingsLoaded && tab === marketTabIdx && <MarketTab refreshKey={refreshKey} />}
+      {settingsLoaded && tab === cryptoTabIdx && <CryptoTab refreshKey={refreshKey} />}
 
       {/* Footer */}
       <div style={{ fontFamily: "Courier New", fontSize: "0.68rem", color: "var(--dim)", textAlign: "center", padding: "18px 0 6px", borderTop: "1px solid rgba(8,120,164,0.15)", marginTop: 24 }}>
