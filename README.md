@@ -66,7 +66,7 @@
 
 #### 第二步：啟動儀表板
 
-**雙擊 `start.bat`**（在專案根目錄）
+**雙擊 `start-windows.bat`**（在專案根目錄）
 
 腳本會自動完成以下步驟：
 
@@ -85,7 +85,7 @@
 
 #### 日常使用
 
-- **啟動**：雙擊 `start.bat`，約 5 秒後瀏覽器自動開啟
+- **啟動**：雙擊 `start-windows.bat`，約 5 秒後瀏覽器自動開啟
 - **停止**：關閉「Backend :8000」和「Frontend :3000」兩個命令視窗
 - **重新整理資料**：瀏覽器按 F5，或等每 30 秒自動更新
 
@@ -102,7 +102,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess -Force
 Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 ```
 
-執行完畢後再雙擊 `start.bat` 重新啟動。
+執行完畢後再雙擊 `start-windows.bat` 重新啟動。
 
 **`python` 指令找不到**
 
