@@ -153,6 +153,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
   const [dividers, setDividers] = useState<Set<string>>(new Set()); // column IDs after which a divider line is shown
   const [showPicker, setShowPicker] = useState(false);
+  const [appliedTo, setAppliedTo] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -230,6 +231,8 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     const divs = [...dividers];
     api.setSettings({ pnl_cols: { [target]: { vis, order, dividers: divs } } }).catch(() => {});
     window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target, vis, order, dividers: divs } }));
+    setAppliedTo(target);
+    setTimeout(() => setAppliedTo(null), 1500);
   }
 
   const cols   = buildCols(currency, optCols, colOrder);
@@ -309,8 +312,9 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
               <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginBottom: 2 }}>套用至</div>
                 {_allAccountKeys.filter(a => a !== account).map(a => (
-                  <button key={a} className="dash-btn dash-btn-sm" onClick={() => applyTo(a)} style={{ fontSize: "0.65rem", textAlign: "left" }}>
-                    {a}
+                  <button key={a} className="dash-btn dash-btn-sm" onClick={() => applyTo(a)}
+                    style={{ fontSize: "0.65rem", textAlign: "left", color: appliedTo === a ? "var(--teal)" : undefined }}>
+                    {appliedTo === a ? "✓ 已套用" : a}
                   </button>
                 ))}
               </div>
