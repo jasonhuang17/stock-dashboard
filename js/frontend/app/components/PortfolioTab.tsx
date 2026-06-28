@@ -685,7 +685,9 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
         {visibleGroups.length > 0
           ? visibleGroups.map((item, idx) => (
               <div key={item.gi}>
-                {groupDivider}
+                {idx === 0
+                  ? <div style={{ margin: "16px 0 12px", borderTop: "2px solid rgba(30,207,214,0.25)", borderRadius: 1 }} />
+                  : groupDivider}
                 {groupTitle(item.group.name)}
                 {item.relevantKeys.map(k => {
                   const krows = rowMap[k] ?? [];
