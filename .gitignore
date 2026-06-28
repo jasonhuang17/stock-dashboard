@@ -1,5 +1,6 @@
 user_data.json
 DEV_LOG.md
+README_streamlit.md
 __pycache__/
 *.pyc
 .DS_Store

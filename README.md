@@ -4,8 +4,6 @@
 
 **JS 版本**：FastAPI backend + Next.js frontend，完整 Web 應用體驗
 
-<!-- Python/Streamlit 版本暫時隱藏 -->
-
 ---
 
 ## 功能特色
@@ -46,21 +44,12 @@
 ## 環境需求
 
 - **Python 3.8 或以上**
+- **Node.js 20 或以上**
 - 網路連線（抓取 Yahoo Finance 資料）
 
 ---
 
 ## 安裝與啟動
-
-<!-- Streamlit 版本（暫時隱藏）
-### Streamlit 版本（快速啟動）
-pip3 install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
-streamlit run stock_dashboard.py  →  http://localhost:8501
--->
-
-### JS 版本（FastAPI + Next.js）
-
-需要：Python 3.8+、Node.js 20+
 
 **1. 安裝 backend 相依套件**
 
@@ -135,30 +124,6 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 
 ---
 
-<!-- Streamlit 版本（暫時隱藏）
-## 建議：使用虛擬環境（Streamlit 版本，選用）
-
-**macOS**
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
-streamlit run stock_dashboard.py
-```
-
-**Windows**
-
-```powershell
-python -m venv venv
-venv\Scripts\activate
-pip install streamlit yfinance plotly pandas pytz streamlit-sortables cachetools
-streamlit run stock_dashboard.py
-```
--->
-
----
-
 ## 使用說明
 
 ### 持倉管理
@@ -212,21 +177,7 @@ streamlit run stock_dashboard.py
 
 ## 相依套件
 
-<!-- Streamlit 版本（暫時隱藏）
-### Streamlit 版本
-
-| 套件 | 用途 |
-|------|------|
-| `streamlit` | Web UI 框架（含 `@st.fragment` 30 秒自動更新） |
-| `yfinance` | Yahoo Finance 資料抓取 |
-| `plotly` | 圓餅圖、長條圖、氣泡圖、瀑布圖、樹狀圖 |
-| `pandas` | 資料處理 |
-| `pytz` | 時區轉換（美東時間） |
-| `streamlit-sortables` | 拖拉排序元件 |
-| `cachetools` | TTL Cache（for `_resolve_tw_ticker` 等函式） |
--->
-
-### JS 版本 backend
+### Backend
 
 | 套件 | 用途 |
 |------|------|
@@ -237,7 +188,7 @@ streamlit run stock_dashboard.py
 | `pytz` | 時區轉換 |
 | `cachetools` | thread-safe TTL Cache |
 
-### JS 版本 frontend
+### Frontend
 
 | 套件 | 用途 |
 |------|------|
