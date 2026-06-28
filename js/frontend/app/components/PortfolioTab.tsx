@@ -72,7 +72,7 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
             {todayPct !== null && (
               <div>
                 <div className="summary-label">今日 %</div>
-                <div className={`summary-value ${todayPct >= 0 ? "pos" : "neg"}`}>{fmtPct(todayPct)}</div>
+                <div className={`summary-value ${todayPct >= 0 ? "pos" : "neg"}`} style={{ fontSize: "1.15rem" }}>{fmtPct(todayPct)}</div>
               </div>
             )}
           </div>
