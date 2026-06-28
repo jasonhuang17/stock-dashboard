@@ -650,7 +650,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
     return <div style={{ padding: 20, color: "var(--dim)", fontSize: "0.82rem" }}>尚無持倉，請先在各帳戶分頁新增。</div>;
 
   const sectionTitle = (t: string) => (
-    <div style={{ fontFamily: "Courier New", color: "var(--gold)", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.12em", margin: "8px 0 12px", borderLeft: "3px solid rgba(237,209,112,0.4)", paddingLeft: 10 }}>
+    <div style={{ fontFamily: "Courier New", color: "var(--gold)", fontSize: "1rem", fontWeight: 700, letterSpacing: "0.1em", margin: "12px 0 14px", borderLeft: "4px solid rgba(237,209,112,0.6)", paddingLeft: 12 }}>
       ◈ {t}
     </div>
   );
