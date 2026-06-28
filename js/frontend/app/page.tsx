@@ -342,7 +342,7 @@ export default function Dashboard() {
 
         {/* Fixed tabs: 市場 + 加密貨幣 */}
         <button className={`tab-btn${tab === marketTabIdx ? " active" : ""}`} onClick={() => handleSetTab(marketTabIdx)}>
-          📈 市場
+          📈 市場 <span style={{ fontSize: "0.6em", opacity: 0.6, fontWeight: 400, letterSpacing: 0 }}>Beta</span>
         </button>
         <button className={`tab-btn${tab === cryptoTabIdx ? " active" : ""}`} onClick={() => handleSetTab(cryptoTabIdx)}>
           ₿ 加密貨幣
