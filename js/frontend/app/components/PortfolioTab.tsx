@@ -685,6 +685,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
         {visibleGroups.length > 0
           ? visibleGroups.map((item, idx) => (
               <div key={item.gi}>
+                {groupDivider}
                 {groupTitle(item.group.name)}
                 {item.relevantKeys.map(k => {
                   const krows = rowMap[k] ?? [];
@@ -696,7 +697,6 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
                 })}
                 <OverallSummaryBar rows={item.rows} currency={currency} label={item.group.name} variant="group" />
                 <PnLChart rows={item.rows} currency={currency} />
-                {idx < visibleGroups.length - 1 && groupDivider}
               </div>
             ))
           : accts.map(a => {
