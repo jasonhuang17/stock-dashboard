@@ -171,7 +171,7 @@ export function fmt(n: number | null, decimals = 2, prefix = ""): string {
 
 export function fmtMoney(n: number | null, currency: "USD" | "TWD" = "USD"): string {
   if (n === null || n === undefined) return "—";
-  const sym = currency === "TWD" ? "NT$" : "$";
+  const sym = currency === "TWD" ? "NT $" : "$";
   return `${n < 0 ? "-" : ""}${sym}${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 

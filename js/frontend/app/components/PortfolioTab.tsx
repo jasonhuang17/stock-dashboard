@@ -125,7 +125,7 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
                 </thead>
                 <tbody>
                   {ahRows.map(r => {
-                    const sym = currency === "TWD" ? "NT$" : "$";
+                    const sym = currency === "TWD" ? "NT $" : "$";
                     const chgCls = r.ah_change === null ? "" : r.ah_change >= 0 ? "pos" : "neg";
                     const timeStr = r.pm_time
                       ? new Date(r.pm_time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
@@ -232,7 +232,7 @@ function ManageTab({
     try { await api.reorderPortfolio(account, newOrder); onRefresh(); } catch { /* silent */ }
   }
 
-  const sym = currency === "TWD" ? "NT$" : "USD";
+  const sym = currency === "TWD" ? "NT $" : "USD";
   const tickers = Object.keys(positions);
 
   const manageTotalCost = Object.values(positions).reduce((s, p) => s + (p.total_cost ?? p.avg_cost * p.shares), 0);
