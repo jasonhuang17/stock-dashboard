@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { api, fmtMoney, fmtPct } from "@/lib/api";
-import type { PortfolioRow, PremarketPortfolioRow, Portfolio } from "@/lib/types";
+import type { PortfolioRow, PremarketPortfolioRow, Portfolio, Account, AccountGroup } from "@/lib/types";
 import { twName } from "@/lib/tw-names";
 import { PnLTable, setAllAccountKeys } from "./PnLTable";
 import { PnLChart } from "./PnLChart";
@@ -421,12 +421,55 @@ function ManageTab({
 }
 
 // ── Overall summary (all accounts, dynamic) ───────────────────────────────────
-function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKey: number }) {
-  const [rowMap, setRowMap] = useState<Record<string, PortfolioRow[]>>({});
-  const [loading, setLoading] = useState(true);
+// Reusable summary bar for a set of rows in a given currency
+function OverallSummaryBar({ rows, currency, label }: { rows: PortfolioRow[]; currency: Currency; label: string }) {
+  const total    = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
+  const unreal   = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const cost     = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const mv       = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+  const unrealPct = cost ? unreal / cost * 100 : null;
+  return (
+    <div className="summary-bar" style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+        <div>
+          <div className="summary-label">{label} 今日損益</div>
+          <div className={`summary-value ${total >= 0 ? "pos" : "neg"}`}>{fmtMoney(total, currency)}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+        <div>
+          <div className="summary-label">未實現損益</div>
+          <div className={`summary-value ${unreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(unreal, currency)}</div>
+        </div>
+        {unrealPct !== null && (
+          <div>
+            <div className="summary-label">未實現 %</div>
+            <div className={`summary-value ${unrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(unrealPct)}</div>
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="summary-label">總成本</div>
+        <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(cost, currency)}</div>
+      </div>
+      <div>
+        <div className="summary-label">總市值</div>
+        <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(mv, currency)}</div>
+      </div>
+    </div>
+  );
+}
+
+function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; refreshKey: number; useMock: boolean }) {
+  const [rowMap, setRowMap]       = useState<Record<string, PortfolioRow[]>>({});
+  const [loading, setLoading]     = useState(true);
+  const [accountGroups, setAccountGroups] = useState<AccountGroup[]>([]);
+  const [editOpen, setEditOpen]   = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [editingNames, setEditingNames] = useState<string[]>([]);
 
   const accounts = Object.entries(portfolio).map(([key, acct]) => ({
-    key, currency: (acct as { currency: Currency }).currency,
+    key, currency: (acct as Account).currency,
   }));
 
   useEffect(() => {
@@ -440,24 +483,56 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolio, refreshKey]);
 
+  useEffect(() => {
+    api.getSettings().then(s => {
+      const groups = s.account_groups ?? [];
+      setAccountGroups(groups);
+      setEditingNames(groups.map(g => g.name));
+    }).catch(() => {});
+  }, []);
+
+  async function saveGroups(groups: AccountGroup[]) {
+    setAccountGroups(groups);
+    setEditingNames(groups.map(g => g.name));
+    await api.setSettings({ account_groups: groups });
+  }
+
+  async function addGroup() {
+    const name = newGroupName.trim();
+    if (!name) return;
+    const next = [...accountGroups, { name, accounts: [] }];
+    setNewGroupName("");
+    await saveGroups(next);
+  }
+
+  async function deleteGroup(idx: number) {
+    await saveGroups(accountGroups.filter((_, i) => i !== idx));
+  }
+
+  async function renameGroup(idx: number) {
+    const name = (editingNames[idx] ?? "").trim();
+    if (!name || name === accountGroups[idx]?.name) return;
+    const next = accountGroups.map((g, i) => i === idx ? { ...g, name } : g);
+    await saveGroups(next);
+  }
+
+  async function toggleAccount(groupIdx: number, acctKey: string, checked: boolean) {
+    const next = accountGroups.map((g, i) => {
+      if (i !== groupIdx) return g;
+      const accounts = checked
+        ? [...g.accounts, acctKey]
+        : g.accounts.filter(a => a !== acctKey);
+      return { ...g, accounts };
+    });
+    await saveGroups(next);
+  }
+
   if (loading) return <div style={{ padding: 20, color: "var(--dim)" }}>載入中… <span className="spinner" /></div>;
 
   const usdAccts = accounts.filter(a => a.currency === "USD");
   const twdAccts = accounts.filter(a => a.currency === "TWD");
   const allUSD = usdAccts.flatMap(a => rowMap[a.key] ?? []);
   const allTWD = twdAccts.flatMap(a => rowMap[a.key] ?? []);
-
-  const usdTotal   = allUSD.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
-  const usdUnreal  = allUSD.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const usdCost    = allUSD.reduce((s, r) => s + r.cost_basis, 0);
-  const usdMV      = allUSD.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
-  const usdUnrealPct = usdCost ? usdUnreal / usdCost * 100 : null;
-
-  const twdTotal   = allTWD.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
-  const twdUnreal  = allTWD.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const twdCost    = allTWD.reduce((s, r) => s + r.cost_basis, 0);
-  const twdMV      = allTWD.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
-  const twdUnrealPct = twdCost ? twdUnreal / twdCost * 100 : null;
 
   if (!allUSD.length && !allTWD.length)
     return <div style={{ padding: 20, color: "var(--dim)", fontSize: "0.82rem" }}>尚無持倉，請先在各帳戶分頁新增。</div>;
@@ -468,12 +543,111 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
     </div>
   );
 
+  const groupTitle = (t: string) => (
+    <div style={{ fontFamily: "Courier New", color: "var(--teal)", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em", margin: "8px 0 10px", borderLeft: "3px solid rgba(30,207,214,0.4)", paddingLeft: 10 }}>
+      ▸ {t}
+    </div>
+  );
+
+  const hasGroups = accountGroups.length > 0;
+
   return (
     <div>
+      {/* Group management toggle */}
+      <div style={{ marginBottom: 12 }}>
+        <button onClick={() => setEditOpen(v => !v)}
+          style={{ background: "none", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, cursor: "pointer", color: "var(--dim)", fontSize: "0.72rem", padding: "3px 10px" }}>
+          ⚙ {editOpen ? "收起分組設定" : "管理帳號分組"}
+        </button>
+      </div>
+
+      {editOpen && (
+        <div style={{ background: "rgba(0,24,40,0.8)", border: "1px solid rgba(30,207,214,0.2)", borderRadius: 6, padding: 16, marginBottom: 20 }}>
+          {accountGroups.length === 0 && (
+            <div style={{ color: "var(--dim)", fontSize: "0.75rem", marginBottom: 12 }}>尚無分組，點擊下方新增第一個分組。</div>
+          )}
+          {accountGroups.map((group, gi) => (
+            <div key={gi} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: gi < accountGroups.length - 1 ? "1px solid rgba(30,207,214,0.1)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <input
+                  value={editingNames[gi] ?? group.name}
+                  onChange={e => setEditingNames(prev => prev.map((n, i) => i === gi ? e.target.value : n))}
+                  onBlur={() => renameGroup(gi)}
+                  onKeyDown={e => e.key === "Enter" && renameGroup(gi)}
+                  style={{ background: "#001d3a", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, color: "var(--text)", fontSize: "0.78rem", padding: "3px 8px", outline: "none", width: 180, fontFamily: "Courier New" }}
+                />
+                {!useMock && (
+                  <button onClick={() => deleteGroup(gi)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dim)", fontSize: "0.8rem", padding: "0 4px" }}>
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {accounts.map(a => (
+                  <label key={a.key} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: "0.74rem", color: group.accounts.includes(a.key) ? "var(--teal)" : "var(--dim)" }}>
+                    <input
+                      type="checkbox"
+                      checked={group.accounts.includes(a.key)}
+                      disabled={useMock}
+                      onChange={e => toggleAccount(gi, a.key, e.target.checked)}
+                      style={{ accentColor: "var(--teal)", cursor: "pointer" }}
+                    />
+                    {a.key}
+                    <span style={{ fontSize: "0.65rem", opacity: 0.6 }}>({a.currency})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!useMock && (
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              <input
+                value={newGroupName}
+                onChange={e => setNewGroupName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addGroup()}
+                placeholder="新分組名稱…"
+                style={{ background: "#001d3a", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, color: "var(--text)", fontSize: "0.78rem", padding: "3px 8px", outline: "none", width: 160, fontFamily: "Courier New" }}
+              />
+              <button onClick={addGroup}
+                style={{ background: "none", border: "1px solid rgba(30,207,214,0.4)", borderRadius: 4, cursor: "pointer", color: "var(--teal)", fontSize: "0.78rem", padding: "3px 10px" }}>
+                ＋ 新增分組
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Custom groups */}
+      {hasGroups && accountGroups.map((group, gi) => {
+        const acctKeys = group.accounts.filter(k => k in portfolio);
+        if (!acctKeys.length) return null;
+        const acctInfos = acctKeys.map(k => ({ key: k, currency: (portfolio[k] as Account).currency }));
+        const groupUSD = acctInfos.filter(a => a.currency === "USD").flatMap(a => rowMap[a.key] ?? []);
+        const groupTWD = acctInfos.filter(a => a.currency === "TWD").flatMap(a => rowMap[a.key] ?? []);
+        if (!groupUSD.length && !groupTWD.length) return null;
+        return (
+          <div key={gi} style={{ marginBottom: 24 }}>
+            {groupTitle(group.name)}
+            {acctInfos.map(a => {
+              const rows = rowMap[a.key] ?? [];
+              return rows.length ? (
+                <div key={a.key} style={{ marginBottom: 16 }}>
+                  <PnLTable rows={rows} currency={a.currency} label={a.key} />
+                </div>
+              ) : null;
+            })}
+            {groupUSD.length > 0 && <OverallSummaryBar rows={groupUSD} currency="USD" label={`${group.name} (USD)`} />}
+            {groupTWD.length > 0 && <OverallSummaryBar rows={groupTWD} currency="TWD" label={`${group.name} (TWD)`} />}
+          </div>
+        );
+      })}
+
+      {/* Overall totals */}
       {allUSD.length > 0 && (
-        <div>
-          {sectionTitle("美股市場 (USD)")}
-          {usdAccts.map(a => {
+        <div style={{ marginTop: hasGroups ? 8 : 0 }}>
+          {sectionTitle(hasGroups ? "美股總計 (USD)" : "美股市場 (USD)")}
+          {!hasGroups && usdAccts.map(a => {
             const rows = rowMap[a.key] ?? [];
             return rows.length ? (
               <div key={a.key} style={{ marginBottom: 16 }}>
@@ -481,41 +655,14 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
               </div>
             ) : null;
           })}
-          <div className="summary-bar" style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-              <div>
-                <div className="summary-label">美股今日合計</div>
-                <div className={`summary-value ${usdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdTotal, "USD")}</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-              <div>
-                <div className="summary-label">未實現合計</div>
-                <div className={`summary-value ${usdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdUnreal, "USD")}</div>
-              </div>
-              {usdUnrealPct !== null && (
-                <div>
-                  <div className="summary-label">未實現 %</div>
-                  <div className={`summary-value ${usdUnrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(usdUnrealPct)}</div>
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="summary-label">總成本</div>
-              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(usdCost, "USD")}</div>
-            </div>
-            <div>
-              <div className="summary-label">總市值</div>
-              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(usdMV, "USD")}</div>
-            </div>
-          </div>
+          <OverallSummaryBar rows={allUSD} currency="USD" label="美股合計" />
           <PnLChart rows={allUSD} currency="USD" />
         </div>
       )}
       {allTWD.length > 0 && (
-        <div style={{ marginTop: allUSD.length ? 24 : 0 }}>
-          {sectionTitle("台股市場 (TWD)")}
-          {twdAccts.map(a => {
+        <div style={{ marginTop: allUSD.length ? 24 : (hasGroups ? 8 : 0) }}>
+          {sectionTitle(hasGroups ? "台股總計 (TWD)" : "台股市場 (TWD)")}
+          {!hasGroups && twdAccts.map(a => {
             const rows = rowMap[a.key] ?? [];
             return rows.length ? (
               <div key={a.key} style={{ marginBottom: 16 }}>
@@ -523,34 +670,7 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
               </div>
             ) : null;
           })}
-          <div className="summary-bar" style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-              <div>
-                <div className="summary-label">台股今日合計</div>
-                <div className={`summary-value ${twdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdTotal, "TWD")}</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-              <div>
-                <div className="summary-label">未實現合計</div>
-                <div className={`summary-value ${twdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdUnreal, "TWD")}</div>
-              </div>
-              {twdUnrealPct !== null && (
-                <div>
-                  <div className="summary-label">未實現 %</div>
-                  <div className={`summary-value ${twdUnrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(twdUnrealPct)}</div>
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="summary-label">總成本</div>
-              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(twdCost, "TWD")}</div>
-            </div>
-            <div>
-              <div className="summary-label">總市值</div>
-              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(twdMV, "TWD")}</div>
-            </div>
-          </div>
+          <OverallSummaryBar rows={allTWD} currency="TWD" label="台股合計" />
           <PnLChart rows={allTWD} currency="TWD" />
         </div>
       )}
@@ -761,7 +881,7 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
         )}
       </div>
 
-      {acctTab === 0 && <OverallTab portfolio={portfolio} refreshKey={refreshKey} />}
+      {acctTab === 0 && <OverallTab portfolio={portfolio} refreshKey={refreshKey} useMock={useMock} />}
 
       {ACCOUNTS.map((acct, i) => {
         const isActive = acctTab === i + 1;

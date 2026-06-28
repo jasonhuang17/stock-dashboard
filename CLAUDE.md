@@ -63,7 +63,7 @@ stock-dashboard/
 │   │       ├── api.ts         # 型別化 API client
 │   │       ├── types.ts       # 共用 TypeScript 介面
 │   │       └── themes.ts      # 主題定義 + applyTheme()
-│   └── user_data.json         # 使用者資料（schema v3，gitignored）
+│   └── user_data.json         # 使用者資料（schema v4，gitignored）
 └── py/                    # Python 版本（全部 gitignored，僅存本地，不再維護）
     ├── stock_dashboard.py
     ├── config.json
@@ -79,10 +79,10 @@ stock-dashboard/
 - **資料來源**：Yahoo Finance via `yfinance`，quotes 28 秒 cache
 - **主色**：teal `#1ECFD6`、gold `#EDD170`、背景 `#001d3a`（9 種主題可切換）
 - **顏色慣例**：紅色（`#C05640`）= 上漲，綠色（`#3DAA70`）= 下跌（台灣慣例）
-- **持久化**：`user_data.json`，**目前格式（schema_version 3）**：
+- **持久化**：`user_data.json`，**目前格式（schema_version 4）**：
   ```json
   {
-    "schema_version": 3,
+    "schema_version": 4,
     "group_tickers":  { "⚡ 個股": [...], "🚀 槓桿型": [...], "🌐 大盤型": [...] },
     "group_markets":  { "⚡ 個股": "US", "🚀 槓桿型": "US", "🌐 大盤型": "US" },
     "pinned_groups":  ["⚡ 個股", "🚀 槓桿型", "🌐 大盤型"],
@@ -90,7 +90,7 @@ stock-dashboard/
       "美股複委託（台幣帳戶）": { "currency": "USD", "positions": { "AAPL": { "shares": 10, "avg_cost": 150.0 } } },
       "台股帳戶":               { "currency": "TWD", "positions": { "2330": { "shares": 1000, "avg_cost": 500.0 } } }
     },
-    "settings": { "use_mock": false, "crypto_tickers": ["BTC-USD", "ETH-USD", "..."] }
+    "settings": { "use_mock": false, "crypto_tickers": ["BTC-USD", "ETH-USD", "..."], "account_groups": [{ "name": "主要帳戶", "accounts": ["美股複委託（台幣帳戶）"] }] }
   }
   ```
 - **台股代號**：純代號存檔（`2330`，不含 `.TW`），`_resolve_tw_ticker()` 在 fetch 時自動查靜態對照表，再試 `.TW` → `.TWO`
@@ -120,7 +120,8 @@ stock-dashboard/
 | 0（無此欄位） | 初始版 | 各種舊格式 |
 | 1 | app v1（origin/master） | 多帳戶 portfolio、圖標重命名 |
 | 2 | app v2 | 新增 `group_markets` |
-| 3 | app v3（當前） | 新增 `settings.crypto_tickers`（自訂加密貨幣觀察清單） |
+| 3 | app v3 | 新增 `settings.crypto_tickers`（自訂加密貨幣觀察清單） |
+| 4 | app v4（當前） | 新增 `settings.account_groups`（整體損益帳號自訂分組） |
 
 ### 新增 migration 的步驟（必須全部完成）
 

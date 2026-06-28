@@ -65,3 +65,8 @@ export interface SortState {
   col: keyof PortfolioRow | null;
   dir: SortDir;
 }
+
+export interface AccountGroup {
+  name: string;
+  accounts: string[];
+}

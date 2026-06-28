@@ -1,4 +1,4 @@
-import type { Quote, PremarketQuote, PortfolioRow, PremarketPortfolioRow, Position, Portfolio, Groups, MarketStatus, Market } from "./types";
+import type { Quote, PremarketQuote, PortfolioRow, PremarketPortfolioRow, Position, Portfolio, Groups, MarketStatus, Market, AccountGroup } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -118,9 +118,9 @@ export const api = {
     get<{ exists: boolean; resolved: string | null }>(`/api/validate/tw/${encodeURIComponent(ticker)}`),
 
   getSettings: () =>
-    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[] }>("/api/settings"),
+    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[]; account_groups?: AccountGroup[] }>("/api/settings"),
 
-  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[] }) =>
+  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[]; account_groups?: AccountGroup[] }) =>
     put<{ use_mock: boolean }>("/api/settings", patch),
 
   validateCrypto: (ticker: string) =>

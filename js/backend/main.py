@@ -59,7 +59,8 @@ _config_lock = threading.Lock()
 # v1 — app v1 baseline (origin/master): consolidates all pre-versioning legacy formats
 # v2 — app v2: added group_markets per-group market designation
 # v3 — app v3: added crypto_tickers to settings (custom crypto watchlist)
-SCHEMA_VERSION = 3
+# v4 — app v4: added account_groups to settings (user-defined portfolio grouping)
+SCHEMA_VERSION = 4
 
 
 def _migrate_v1(data: dict) -> dict:
@@ -113,7 +114,15 @@ def _migrate_v3(data: dict) -> dict:
     return data
 
 
-_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3}
+def _migrate_v4(data: dict) -> dict:
+    """App v4: add account_groups to settings (user-defined portfolio grouping)."""
+    s = data.setdefault("settings", {})
+    if "account_groups" not in s:
+        s["account_groups"] = []
+    return data
+
+
+_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3, 4: _migrate_v4}
 
 
 def run_migrations(data: dict) -> tuple[dict, bool]:
@@ -182,6 +191,7 @@ def load_settings() -> dict:
     s.setdefault("crypto_sort", {"col": "pct", "dir": "desc"})
     s.setdefault("group_sorts", {})
     s.setdefault("crypto_tickers", list(_DEFAULT_CRYPTO))
+    s.setdefault("account_groups", [])
     return s
 
 
@@ -764,6 +774,7 @@ class SettingsBody(BaseModel):
     crypto_sort:        Optional[dict] = None   # { col: "pct"|"price"|"volume", dir: "asc"|"desc" }
     group_sorts:        Optional[dict] = None   # { group_name: sort_mode_string }
     crypto_tickers:     Optional[list] = None   # list of Yahoo Finance crypto tickers e.g. ["BTC-USD"]
+    account_groups:     Optional[list] = None   # [{ name: str, accounts: [str] }] user-defined portfolio groups
 
 
 @app.get("/api/settings")
@@ -800,6 +811,12 @@ def put_settings(body: SettingsBody):
             s["crypto_tickers"] = tickers
             with _crypto_cache_lock:
                 _crypto_cache.clear()
+    if body.account_groups is not None:
+        groups = []
+        for g in body.account_groups:
+            if isinstance(g, dict) and isinstance(g.get("name"), str) and isinstance(g.get("accounts"), list):
+                groups.append({"name": g["name"], "accounts": [a for a in g["accounts"] if isinstance(a, str)]})
+        s["account_groups"] = groups
     save_settings(s)
     return s
 
