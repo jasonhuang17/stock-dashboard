@@ -217,9 +217,37 @@ _ytd_cache: TTLCache = TTLCache(maxsize=500, ttl=86400)   # 24h — year-start p
 _52w_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)    # 1h — 52-week high/low (background-populated)
 _cache_lock = threading.Lock()
 
-# ── Quote logging ─────────────────────────────────────────────────────────────
-_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quote_log.jsonl")
+# ── Quote / portfolio logging ──────────────────────────────────────────────────
+_LOG_FILE       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quote_log.jsonl")
+_PORTFOLIO_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portfolio_log.jsonl")
 _log_lock = threading.Lock()
+
+def _log_portfolio(account: str, currency: str, rows: list[dict],
+                   tw_resolved: dict | None = None, stale_tickers: list | None = None) -> None:
+    """Append one entry to portfolio_log.jsonl recording which fields were null and why."""
+    et = pytz.timezone("America/New_York")
+    null_price  = [r["ticker"] for r in rows if r.get("price")     is None]
+    null_ytd    = [r["ticker"] for r in rows if r.get("ytd_gain")  is None]
+    null_52w    = [r["ticker"] for r in rows if r.get("week_high") is None]
+    entry = {
+        "ts":            datetime.now(et).strftime("%Y-%m-%d %H:%M:%S ET"),
+        "account":       account,
+        "currency":      currency,
+        "tickers":       [r["ticker"] for r in rows],
+        "null_price":    null_price,
+        "stale_used":    stale_tickers or [],
+        "null_ytd":      null_ytd,
+        "null_52w":      null_52w,
+    }
+    if tw_resolved:
+        entry["tw_resolved"] = tw_resolved
+    try:
+        with _log_lock:
+            with open(_PORTFOLIO_LOG, "a") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 def _log_quotes(kind: str, rows: list[dict], n_fetched: int = 0) -> None:
     """Append one JSONL entry with timestamp, kind, cache hit/miss counts."""
@@ -594,11 +622,20 @@ def _portfolio_rows(account: str) -> list[dict]:
     else:
         ytd_map = ytd_full_map
 
+    # Track which tickers came from stale cache (price present but not in live cache)
+    with _cache_lock:
+        live_cached = set(_quotes_cache.keys())
+    stale_tickers = []
+
     rows = []
     for ticker, pos in positions.items():
         q = quote_map.get(ticker, {})
         price = q.get("price")
         pct = q.get("pct")
+        # Determine the resolved ticker key for cache check
+        resolved_key = bare_to_full.get(ticker, ticker) if is_twd else ticker
+        if price is not None and resolved_key not in live_cached:
+            stale_tickers.append(ticker)
         shares = pos["shares"]
         avg_cost = pos["avg_cost"]
         total_cost = pos.get("total_cost")
@@ -631,6 +668,14 @@ def _portfolio_rows(account: str) -> list[dict]:
             "week_high": q.get("week_high"), "week_low": q.get("week_low"),
             "ytd_gain": ytd_gain, "ytd_pct": ytd_pct,
         })
+
+    _log_portfolio(
+        account=account,
+        currency=acct.get("currency", ""),
+        rows=rows,
+        tw_resolved=bare_to_full if is_twd else None,
+        stale_tickers=stale_tickers,
+    )
     return rows
 
 
