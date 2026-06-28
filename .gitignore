@@ -1,6 +1,7 @@
 user_data.json
 DEV_LOG.md
 README_streamlit.md
+stock_dashboard.py
 __pycache__/
 *.pyc
 .DS_Store
