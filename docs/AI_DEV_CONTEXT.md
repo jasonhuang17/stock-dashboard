@@ -24,45 +24,48 @@ A full-stack personal stock portfolio dashboard. Supports real-time US and Taiwa
 
 ```
 stock-dashboard/
-├── backend/           FastAPI Python backend (port 8000)
-│   ├── main.py        All routes + business logic (~1400 lines)
-│   ├── demo_data.json Read-only demo portfolio (committed)
-│   ├── tw_exchange.py Static dict: bare TW code → ".TW" | ".TWO" (~2340 entries)
-│   ├── tw_names.py    Static dict: bare TW code → Chinese name (~5083 entries)
-│   └── requirements.txt
-├── frontend/          Next.js 15 frontend (port 3000)
-│   ├── app/
-│   │   ├── page.tsx               Main dashboard (tabs, groups, header)
-│   │   ├── layout.tsx             Root layout + ThemeInitializer
-│   │   ├── globals.css            CSS vars, utility classes
-│   │   ├── stock/[ticker]/page.tsx  K-line chart page
-│   │   └── components/
-│   │       ├── PortfolioTab.tsx   Portfolio P&L + manage (4 nested sub-components)
-│   │       ├── PnLTable.tsx       Sortable, column-picker table
-│   │       ├── PnLChart.tsx       Recharts (bubble/waterfall/treemap/bar)
-│   │       ├── GroupTab.tsx       Watchlist group (cards + charts + premarket)
-│   │       ├── MarketTab.tsx      US screener + TW popular stocks
-│   │       ├── CryptoTab.tsx      15 crypto coins
-│   │       ├── StockCard.tsx      Single quote card
-│   │       ├── SortableChips.tsx  dnd-kit drag-drop reordering
-│   │       ├── ThemeSelector.tsx  9-theme switcher (localStorage)
-│   │       └── ThemeInitializer.tsx  Apply saved theme on mount (no FOUC)
-│   └── lib/
-│       ├── api.ts     Typed API client (all backend calls)
-│       ├── types.ts   Shared TypeScript interfaces
-│       └── themes.ts  Theme definitions + applyTheme() / loadSavedTheme()
-├── user_data.json     Local user data, schema v2 (gitignored)
+├── start-js.sh        One-command launch (backend + frontend)
 ├── CLAUDE.md          AI agent entry point (read this first)
 ├── DEV_LOG.md         Changelog + technical notes (gitignored)
 ├── README.md          User-facing docs
-└── start-js.sh        One-command launch (tmux: backend + frontend)
+├── docs/              AI dev documentation (committed)
+├── app/               JS version
+│   ├── backend/       FastAPI Python backend (port 8000)
+│   │   ├── main.py        All routes + business logic (~1400 lines)
+│   │   ├── demo_data.json Read-only demo portfolio (committed)
+│   │   ├── tw_exchange.py Static dict: bare TW code → ".TW" | ".TWO" (~2340 entries)
+│   │   ├── tw_names.py    Static dict: bare TW code → Chinese name (~5083 entries)
+│   │   └── requirements.txt
+│   ├── frontend/      Next.js 15 frontend (port 3000)
+│   │   ├── app/
+│   │   │   ├── page.tsx               Main dashboard (tabs, groups, header)
+│   │   │   ├── layout.tsx             Root layout + ThemeInitializer
+│   │   │   ├── globals.css            CSS vars, utility classes
+│   │   │   ├── stock/[ticker]/page.tsx  K-line chart page
+│   │   │   └── components/
+│   │   │       ├── PortfolioTab.tsx   Portfolio P&L + manage
+│   │   │       ├── PnLTable.tsx       Sortable, column-picker table
+│   │   │       ├── PnLChart.tsx       Recharts (bubble/waterfall/treemap/bar)
+│   │   │       ├── GroupTab.tsx       Watchlist group (cards + charts + premarket)
+│   │   │       ├── MarketTab.tsx      US screener + TW popular stocks
+│   │   │       ├── CryptoTab.tsx      15 crypto coins
+│   │   │       ├── StockCard.tsx      Single quote card
+│   │   │       ├── SortableChips.tsx  dnd-kit drag-drop reordering
+│   │   │       ├── ThemeSelector.tsx  9-theme switcher (localStorage)
+│   │   │       └── ThemeInitializer.tsx  Apply saved theme on mount
+│   │   └── lib/
+│   │       ├── api.ts     Typed API client (all backend calls)
+│   │       ├── types.ts   Shared TypeScript interfaces
+│   │       └── themes.ts  Theme definitions + applyTheme() / loadSavedTheme()
+│   └── user_data.json Local user data, schema v2 (gitignored)
+└── streamlit/         Python/Streamlit version (all gitignored, not maintained)
 ```
 
 **Streamlit version** (`stock_dashboard.py`, gitignored locally): original Python single-file implementation, no longer maintained. Separate `README_streamlit.md` documents it locally. All active development is on the JS version.
 
 ---
 
-## Backend Architecture (`backend/main.py`)
+## Backend Architecture (`app/backend/main.py`)
 
 ### Config & Persistence
 
@@ -70,12 +73,13 @@ Two JSON files:
 
 | File | Committed | Purpose |
 |------|-----------|---------|
-| `user_data.json` | No (gitignored) | Real user data: groups, portfolio, settings |
-| `backend/demo_data.json` | Yes | Read-only demo portfolio (55+ US stocks, TW stocks) |
+| `app/user_data.json` | No (gitignored) | Real user data: groups, portfolio, settings |
+| `app/backend/demo_data.json` | Yes | Read-only demo portfolio (55+ US stocks, TW stocks) |
 
 ```python
-CONFIG_FILE = "user_data.json"     # relative to backend/
-DEMO_FILE   = "demo_data.json"
+# Paths use os.path.dirname(__file__) so they're always relative to main.py's location
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "user_data.json")  # → app/user_data.json
+DEMO_FILE   = os.path.join(os.path.dirname(__file__), "demo_data.json")        # → app/backend/demo_data.json
 SCHEMA_VERSION = 2
 ```
 

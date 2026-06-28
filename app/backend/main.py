@@ -1,7 +1,6 @@
 """
 Stock Dashboard — FastAPI backend
-Shares config.json with the Streamlit app (read/write).
-Run: uvicorn main:app --reload --port 8000
+Run: cd app/backend && uvicorn main:app --reload --port 8000
 """
 import concurrent.futures
 import json

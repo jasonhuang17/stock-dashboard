@@ -54,14 +54,14 @@
 **1. 安裝 backend 相依套件**
 
 ```bash
-cd ~/Desktop/stock-dashboard/backend
+cd ~/Desktop/stock-dashboard/app/backend
 pip3 install -r requirements.txt
 ```
 
 **2. 安裝 frontend 相依套件**
 
 ```bash
-cd ~/Desktop/stock-dashboard/frontend
+cd ~/Desktop/stock-dashboard/app/frontend
 npm install
 ```
 
@@ -76,10 +76,10 @@ cd ~/Desktop/stock-dashboard
 
 ```bash
 # Terminal 1
-cd backend && uvicorn main:app --port 8000 --reload
+cd app/backend && uvicorn main:app --port 8000 --reload
 
 # Terminal 2
-cd frontend && npm run dev
+cd app/frontend && npm run dev
 ```
 
 瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。

@@ -23,10 +23,10 @@ cd ~/Desktop/stock-dashboard
 
 ```bash
 # Terminal 1（backend）
-cd backend && uvicorn main:app --port 8000 --reload
+cd app/backend && uvicorn main:app --port 8000 --reload
 
 # Terminal 2（frontend）
-cd frontend && npm run dev
+cd app/frontend && npm run dev
 ```
 
 瀏覽器開 `http://localhost:3000`（前端）或 `http://localhost:8000/docs`（API 文件）。
@@ -37,35 +37,38 @@ cd frontend && npm run dev
 
 ```
 stock-dashboard/
-├── backend/
-│   ├── main.py            # FastAPI 後端（~1400 行，所有 API + 業務邏輯）
-│   ├── demo_data.json     # Demo 持倉資料（已 commit）
-│   ├── tw_exchange.py     # 台股代號 → 交易所靜態對照表（~2340 筆）
-│   ├── tw_names.py        # 台股代號 → 中文名稱靜態對照表（~5083 筆）
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx               # 主頁（tabs、groups、header）
-│   │   ├── layout.tsx             # Root layout + ThemeInitializer
-│   │   ├── globals.css            # CSS 變數、utility classes
-│   │   ├── stock/[ticker]/page.tsx  # K 線圖頁面
-│   │   └── components/            # 所有 React 元件
-│   └── lib/
-│       ├── api.ts         # 型別化 API client
-│       ├── types.ts       # 共用 TypeScript 介面
-│       └── themes.ts      # 主題定義 + applyTheme()
-├── user_data.json         # 使用者資料（schema v2，gitignored）
+├── start-js.sh            # 一鍵啟動腳本（根目錄）
 ├── CLAUDE.md              # 本檔案（已 commit）
-├── DEV_LOG.md             # 開發紀錄（gitignored）
 ├── README.md              # 使用說明（已 commit）
+├── DEV_LOG.md             # 開發紀錄（gitignored）
 ├── docs/                  # AI 輔助開發文件（已 commit）
 │   ├── AI_DEV_CONTEXT.md
 │   ├── DESIGN_DECISIONS.md
 │   └── REGRESSION_NOTES.md
-└── start-js.sh            # 一鍵啟動腳本
+├── app/                   # JS 版本
+│   ├── backend/
+│   │   ├── main.py            # FastAPI 後端（~1400 行，所有 API + 業務邏輯）
+│   │   ├── demo_data.json     # Demo 持倉資料（已 commit）
+│   │   ├── tw_exchange.py     # 台股代號 → 交易所靜態對照表（~2340 筆）
+│   │   ├── tw_names.py        # 台股代號 → 中文名稱靜態對照表（~5083 筆）
+│   │   └── requirements.txt
+│   ├── frontend/
+│   │   ├── app/
+│   │   │   ├── page.tsx               # 主頁（tabs、groups、header）
+│   │   │   ├── layout.tsx             # Root layout + ThemeInitializer
+│   │   │   ├── globals.css            # CSS 變數、utility classes
+│   │   │   ├── stock/[ticker]/page.tsx  # K 線圖頁面
+│   │   │   └── components/            # 所有 React 元件
+│   │   └── lib/
+│   │       ├── api.ts         # 型別化 API client
+│   │       ├── types.ts       # 共用 TypeScript 介面
+│   │       └── themes.ts      # 主題定義 + applyTheme()
+│   └── user_data.json         # 使用者資料（schema v2，gitignored）
+└── streamlit/             # Python 版本（全部 gitignored，僅存本地，不再維護）
+    ├── stock_dashboard.py
+    ├── config.json
+    └── README_streamlit.md
 ```
-
-> **Streamlit 版本**（`stock_dashboard.py`）已 gitignored，僅存本地，不再維護。
 
 ---
 

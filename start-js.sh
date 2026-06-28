@@ -7,14 +7,14 @@ cd "$ROOT"
 
 # Backend
 echo "Starting FastAPI backend on :8000..."
-cd backend
+cd app/backend
 uvicorn main:app --port 8000 --reload &
 BACKEND_PID=$!
 cd "$ROOT"
 
 # Frontend (needs Node >=20)
 echo "Starting Next.js frontend on :3000..."
-cd frontend
+cd app/frontend
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 nvm use 20 2>/dev/null || true
