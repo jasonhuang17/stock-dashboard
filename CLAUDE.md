@@ -23,10 +23,10 @@ cd ~/Desktop/stock-dashboard
 
 ```bash
 # Terminal 1（backend）
-cd app/backend && uvicorn main:app --port 8000 --reload
+cd js/backend && uvicorn main:app --port 8000 --reload
 
 # Terminal 2（frontend）
-cd app/frontend && npm run dev
+cd js/frontend && npm run dev
 ```
 
 瀏覽器開 `http://localhost:3000`（前端）或 `http://localhost:8000/docs`（API 文件）。
@@ -45,7 +45,7 @@ stock-dashboard/
 │   ├── AI_DEV_CONTEXT.md
 │   ├── DESIGN_DECISIONS.md
 │   └── REGRESSION_NOTES.md
-├── app/                   # JS 版本
+├── js/                   # JS 版本
 │   ├── backend/
 │   │   ├── main.py            # FastAPI 後端（~1400 行，所有 API + 業務邏輯）
 │   │   ├── demo_data.json     # Demo 持倉資料（已 commit）
@@ -64,7 +64,7 @@ stock-dashboard/
 │   │       ├── types.ts       # 共用 TypeScript 介面
 │   │       └── themes.ts      # 主題定義 + applyTheme()
 │   └── user_data.json         # 使用者資料（schema v2，gitignored）
-└── streamlit/             # Python 版本（全部 gitignored，僅存本地，不再維護）
+└── py/                    # Python 版本（全部 gitignored，僅存本地，不再維護）
     ├── stock_dashboard.py
     ├── config.json
     └── README_streamlit.md
@@ -151,7 +151,7 @@ SCHEMA_VERSION = 3
 
 ---
 
-## 關鍵後端函式（`backend/main.py`）
+## 關鍵後端函式（`js/backend/main.py`）
 
 | 函式 | 說明 |
 |------|------|

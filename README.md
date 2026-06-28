@@ -54,14 +54,14 @@
 **1. 安裝 backend 相依套件**
 
 ```bash
-cd ~/Desktop/stock-dashboard/app/backend
+cd ~/Desktop/stock-dashboard/js/backend
 pip3 install -r requirements.txt
 ```
 
 **2. 安裝 frontend 相依套件**
 
 ```bash
-cd ~/Desktop/stock-dashboard/app/frontend
+cd ~/Desktop/stock-dashboard/js/frontend
 npm install
 ```
 
@@ -76,10 +76,10 @@ cd ~/Desktop/stock-dashboard
 
 ```bash
 # Terminal 1
-cd app/backend && uvicorn main:app --port 8000 --reload
+cd js/backend && uvicorn main:app --port 8000 --reload
 
 # Terminal 2
-cd app/frontend && npm run dev
+cd js/frontend && npm run dev
 ```
 
 瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。
@@ -209,7 +209,7 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
 確認代號正確（如 `2330`、`00981A`）。系統會自動試 `.TW` 與 `.TWO`，首次載入需幾秒解析。
 
 **Q：持倉資料重啟後消失？**
-確認 `user_data.json` 在專案資料夾內（`stock-dashboard/user_data.json`）。
+確認 `user_data.json` 在 `stock-dashboard/js/user_data.json`。
 
 **Q：如何停止儀表板？**
 在 Terminal / PowerShell 按 `Ctrl + C`。

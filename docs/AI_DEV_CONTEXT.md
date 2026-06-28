@@ -29,7 +29,7 @@ stock-dashboard/
 ├── DEV_LOG.md         Changelog + technical notes (gitignored)
 ├── README.md          User-facing docs
 ├── docs/              AI dev documentation (committed)
-├── app/               JS version
+├── js/               JS version
 │   ├── backend/       FastAPI Python backend (port 8000)
 │   │   ├── main.py        All routes + business logic (~1400 lines)
 │   │   ├── demo_data.json Read-only demo portfolio (committed)
@@ -58,14 +58,14 @@ stock-dashboard/
 │   │       ├── types.ts   Shared TypeScript interfaces
 │   │       └── themes.ts  Theme definitions + applyTheme() / loadSavedTheme()
 │   └── user_data.json Local user data, schema v2 (gitignored)
-└── streamlit/         Python/Streamlit version (all gitignored, not maintained)
+└── py/                Python/Streamlit version (all gitignored, not maintained)
 ```
 
 **Streamlit version** (`stock_dashboard.py`, gitignored locally): original Python single-file implementation, no longer maintained. Separate `README_streamlit.md` documents it locally. All active development is on the JS version.
 
 ---
 
-## Backend Architecture (`app/backend/main.py`)
+## Backend Architecture (`js/backend/main.py`)
 
 ### Config & Persistence
 
@@ -73,13 +73,13 @@ Two JSON files:
 
 | File | Committed | Purpose |
 |------|-----------|---------|
-| `app/user_data.json` | No (gitignored) | Real user data: groups, portfolio, settings |
-| `app/backend/demo_data.json` | Yes | Read-only demo portfolio (55+ US stocks, TW stocks) |
+| `js/user_data.json` | No (gitignored) | Real user data: groups, portfolio, settings |
+| `js/backend/demo_data.json` | Yes | Read-only demo portfolio (55+ US stocks, TW stocks) |
 
 ```python
 # Paths use os.path.dirname(__file__) so they're always relative to main.py's location
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "user_data.json")  # → app/user_data.json
-DEMO_FILE   = os.path.join(os.path.dirname(__file__), "demo_data.json")        # → app/backend/demo_data.json
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "user_data.json")  # → js/user_data.json
+DEMO_FILE   = os.path.join(os.path.dirname(__file__), "demo_data.json")        # → js/backend/demo_data.json
 SCHEMA_VERSION = 2
 ```
 

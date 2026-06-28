@@ -1,7 +1,7 @@
-app/user_data.json
-streamlit/
+js/user_data.json
+py/
 __pycache__/
 *.pyc
 .DS_Store
-app/backend/quote_log.jsonl
+js/backend/quote_log.jsonl
 DEV_LOG.md
