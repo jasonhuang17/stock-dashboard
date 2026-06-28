@@ -104,6 +104,7 @@ html, body {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  position: relative;
 }
 .pnl-table th:first-child { text-align: left; }
 .pnl-table th:hover, .pnl-table th.active { color: var(--teal); }
@@ -240,3 +241,21 @@ hr.dash-hr { border: none; border-top: 1px solid rgba(8,120,164,0.25); margin: 4
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(8,120,164,0.35); border-radius: 3px; }
+
+/* ── Tooltips ──────────────────────────────────────────────────────────────── */
+.col-tip { position: relative; display: inline-flex; align-items: center; }
+.col-tip-icon {
+  font-size: 0.58rem; margin-left: 3px; opacity: 0.5;
+  cursor: help; user-select: none;
+}
+.col-tip-box {
+  opacity: 0; pointer-events: none;
+  position: absolute; bottom: calc(100% + 5px); left: 50%;
+  transform: translateX(-50%);
+  background: #001828; border: 1px solid rgba(30,207,214,0.3);
+  color: var(--text); font-size: 0.72rem; font-weight: 400; letter-spacing: 0;
+  padding: 5px 10px; border-radius: 5px; white-space: nowrap;
+  z-index: 300; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  transition: opacity 0.12s;
+}
+.col-tip:hover .col-tip-box { opacity: 1; }

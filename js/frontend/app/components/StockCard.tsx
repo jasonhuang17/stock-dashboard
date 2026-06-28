@@ -59,7 +59,11 @@ export function PremarketCard({ q }: { q: PremarketQuote }) {
             {arrow(q.pct)} {q.pct !== null ? `${q.pct >= 0 ? "+" : ""}${q.pct.toFixed(2)}%` : "—"}
           </div>
           <div style={{ fontSize: "0.68rem", color: "var(--dim)", marginTop: 4 }}>
-            vs prev close ${q.prev_close?.toFixed(2) ?? "—"} · {timeStr}
+            <span className="col-tip" style={{ cursor: "default" }}>
+              <span style={{ borderBottom: "1px dotted rgba(100,130,160,0.5)" }}>vs prev close</span>
+              <span className="col-tip-box" style={{ fontSize: "0.68rem" }}>相對於上個交易日收盤價的變動</span>
+            </span>
+            {" "}${q.prev_close?.toFixed(2) ?? "—"} · {timeStr}
           </div>
         </>
       ) : (

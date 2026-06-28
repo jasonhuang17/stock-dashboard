@@ -56,6 +56,46 @@ const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
 
 const DEFAULT_ORDER = OPT_COLS.map(c => c.id);
 
+const TOOLTIPS: Partial<Record<string, string>> = {
+  avg_cost:    "總成本 / 股數",
+  today_gain:  "今日漲跌 × 股數",
+  unreal_gain: "總市價 - 總成本",
+  week_high:   "過去 52 週（約一年）的最高成交價",
+  week_low:    "過去 52 週（約一年）的最低成交價",
+  ytd_gain:    "Year to Date：今年 1 月 1 日起至今的累計漲幅",
+  ytd_pct:     "Year to Date：今年 1 月 1 日起至今的累計漲幅%",
+};
+
+function ColTooltip({ text }: { text: string }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  return (
+    <span
+      className="col-tip"
+      onMouseEnter={e => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const half = 130; // half of max tooltip width
+        const x = Math.max(half, Math.min(r.left + r.width / 2, window.innerWidth - half));
+        setPos({ x, y: r.top });
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
+      <span className="col-tip-icon">ⓘ</span>
+      {pos && (
+        <span style={{
+          position: "fixed", left: pos.x, top: pos.y - 8,
+          transform: "translate(-50%, -100%)",
+          background: "#001828", border: "1px solid rgba(30,207,214,0.3)",
+          color: "var(--text)", fontSize: "0.72rem", fontWeight: 400, letterSpacing: 0,
+          padding: "5px 10px", borderRadius: 5, whiteSpace: "nowrap",
+          zIndex: 300, boxShadow: "0 4px 12px rgba(0,0,0,0.4)", pointerEvents: "none",
+        }}>
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function defaultOptCols(): Set<string> {
   return new Set(OPT_COLS.filter(c => c.defaultOn).map(c => c.id));
 }
@@ -345,6 +385,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                     style={{ cursor: sortable ? "pointer" : "default", ...divStyle(idx) }}
                   >
                     {c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}
+                    {TOOLTIPS[c.key] && <ColTooltip text={TOOLTIPS[c.key]!} />}
                   </th>
                 );
               })}
