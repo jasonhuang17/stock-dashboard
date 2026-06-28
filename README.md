@@ -51,6 +51,20 @@
 
 ## 安裝與啟動
 
+### Windows（一鍵啟動）
+
+直接雙擊 `start.bat`。
+
+腳本會自動檢查 Python / Node.js 是否已安裝，並在首次執行時自動安裝所有相依套件，然後開啟瀏覽器到 `http://localhost:3000`。
+
+若尚未安裝 Python 或 Node.js，腳本會顯示詳細安裝步驟：
+- **Python**：至 https://www.python.org/downloads/ 下載，安裝時勾選 **Add Python to PATH**
+- **Node.js**：至 https://nodejs.org/ 下載 LTS 版，全部預設值安裝
+
+---
+
+### macOS / Linux
+
 **1. 安裝 backend 相依套件**
 
 ```bash
