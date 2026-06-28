@@ -58,7 +58,8 @@ _config_lock = threading.Lock()
 #
 # v1 — app v1 baseline (origin/master): consolidates all pre-versioning legacy formats
 # v2 — app v2: added group_markets per-group market designation
-SCHEMA_VERSION = 2
+# v3 — app v3: added crypto_tickers to settings (custom crypto watchlist)
+SCHEMA_VERSION = 3
 
 
 def _migrate_v1(data: dict) -> dict:
@@ -100,7 +101,19 @@ def _migrate_v2(data: dict) -> dict:
     return data
 
 
-_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2}
+def _migrate_v3(data: dict) -> dict:
+    """App v3: add crypto_tickers to settings with the 15 built-in defaults."""
+    s = data.setdefault("settings", {})
+    if "crypto_tickers" not in s:
+        s["crypto_tickers"] = [
+            "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
+            "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD",
+            "MATIC-USD", "UNI-USD", "LTC-USD", "ATOM-USD", "FIL-USD",
+        ]
+    return data
+
+
+_MIGRATIONS: dict = {1: _migrate_v1, 2: _migrate_v2, 3: _migrate_v3}
 
 
 def run_migrations(data: dict) -> tuple[dict, bool]:
@@ -168,6 +181,7 @@ def load_settings() -> dict:
     s.setdefault("theme", "dark-cyber")
     s.setdefault("crypto_sort", {"col": "pct", "dir": "desc"})
     s.setdefault("group_sorts", {})
+    s.setdefault("crypto_tickers", list(_DEFAULT_CRYPTO))
     return s
 
 
@@ -749,6 +763,7 @@ class SettingsBody(BaseModel):
     theme:              Optional[str]  = None   # active color theme ID
     crypto_sort:        Optional[dict] = None   # { col: "pct"|"price"|"volume", dir: "asc"|"desc" }
     group_sorts:        Optional[dict] = None   # { group_name: sort_mode_string }
+    crypto_tickers:     Optional[list] = None   # list of Yahoo Finance crypto tickers e.g. ["BTC-USD"]
 
 
 @app.get("/api/settings")
@@ -779,6 +794,12 @@ def put_settings(body: SettingsBody):
         existing = s.get("group_sorts", {})
         existing.update(body.group_sorts)
         s["group_sorts"] = existing
+    if body.crypto_tickers is not None:
+        tickers = [str(t) for t in body.crypto_tickers if isinstance(t, str) and t]
+        if tickers:
+            s["crypto_tickers"] = tickers
+            with _crypto_cache_lock:
+                _crypto_cache.clear()
     save_settings(s)
     return s
 
@@ -1385,12 +1406,13 @@ def crypto_quotes():
     with _crypto_cache_lock:
         if "quotes" in _crypto_cache:
             return _crypto_cache["quotes"]
+    tickers = load_settings().get("crypto_tickers", _DEFAULT_CRYPTO)
     try:
-        df = yf.download(_DEFAULT_CRYPTO, period="5d", interval="1d", progress=False, auto_adjust=False)
+        df = yf.download(tickers, period="5d", interval="1d", progress=False, auto_adjust=False)
         rows = []
         if not df.empty:
             is_multi = hasattr(df.columns, "levels")
-            for t in _DEFAULT_CRYPTO:
+            for t in tickers:
                 try:
                     closes = df["Close"][t].dropna() if is_multi else df["Close"].dropna()
                     vols   = df["Volume"][t].dropna() if is_multi else df["Volume"].dropna()
@@ -1421,3 +1443,26 @@ def validate_tw(ticker: str):
     exists = _ticker_exists_tw(bare)
     resolved = _resolve_tw_ticker(bare) if exists else None
     return {"exists": exists, "resolved": resolved}
+
+
+_crypto_validate_cache: TTLCache = TTLCache(maxsize=200, ttl=300)
+_crypto_validate_lock = threading.Lock()
+
+
+@app.get("/api/validate/crypto/{ticker}")
+def validate_crypto(ticker: str):
+    t = ticker.upper().strip()
+    if not t.endswith("-USD") and not t.endswith("-USDT"):
+        t = t + "-USD"
+    with _crypto_validate_lock:
+        if t in _crypto_validate_cache:
+            return _crypto_validate_cache[t]
+    try:
+        df = yf.download(t, period="5d", interval="1d", progress=False, auto_adjust=False)
+        valid = not df.empty and len(df) >= 1
+        result = {"valid": valid, "ticker": t}
+    except Exception:
+        result = {"valid": False, "ticker": t}
+    with _crypto_validate_lock:
+        _crypto_validate_cache[t] = result
+    return result

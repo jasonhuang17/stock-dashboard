@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -26,6 +26,12 @@ const FULL_NAMES: Record<string, string> = {
   "LTC-USD": "Litecoin",   "ATOM-USD": "Cosmos",    "FIL-USD": "Filecoin",
 };
 
+const DEFAULT_TICKERS = [
+  "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
+  "ADA-USD", "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD",
+  "MATIC-USD", "UNI-USD", "LTC-USD", "ATOM-USD", "FIL-USD",
+];
+
 type SortCol = "pct" | "price" | "volume";
 type SortState = { col: SortCol; dir: "asc" | "desc" };
 
@@ -33,10 +39,17 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
   const [coins, setCoins] = useState<Coin[]>([]);
   const [sort, setSort] = useState<SortState>({ col: "pct", dir: "desc" });
   const [loading, setLoading] = useState(true);
+  const [tickers, setTickers] = useState<string[]>(DEFAULT_TICKERS);
+  const [editOpen, setEditOpen] = useState(false);
+  const [addInput, setAddInput] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addLoading, setAddLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.getSettings().then(s => {
       if (s.crypto_sort) setSort({ col: s.crypto_sort.col as SortCol, dir: s.crypto_sort.dir });
+      if (s.crypto_tickers?.length) setTickers(s.crypto_tickers);
     }).catch(() => {});
   }, []);
 
@@ -55,6 +68,42 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
   }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleAdd() {
+    const raw = addInput.trim().toUpperCase();
+    if (!raw) return;
+    const t = raw.endsWith("-USD") || raw.endsWith("-USDT") ? raw : raw + "-USD";
+    if (tickers.includes(t)) {
+      setAddError("已在清單中");
+      return;
+    }
+    setAddLoading(true);
+    setAddError(null);
+    try {
+      const res = await api.validateCrypto(t);
+      if (!res.valid) {
+        setAddError(`找不到 ${res.ticker}`);
+        return;
+      }
+      const next = [...tickers, res.ticker];
+      setTickers(next);
+      setAddInput("");
+      await api.setSettings({ crypto_tickers: next });
+      await load();
+    } catch {
+      setAddError("驗證失敗，請稍後再試");
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function handleRemove(ticker: string) {
+    const next = tickers.filter(t => t !== ticker);
+    if (next.length === 0) return;
+    setTickers(next);
+    await api.setSettings({ crypto_tickers: next });
+    await load();
+  }
 
   function onHeaderClick(col: SortCol) {
     changeSort(sort.col === col
@@ -78,10 +127,24 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: editOpen ? 12 : 16, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "Courier New", fontSize: "0.78rem", color: "var(--dim)", letterSpacing: "0.08em" }}>
           加密貨幣（via Yahoo Finance，資料延遲約 15 秒）
         </span>
+        <button
+          onClick={() => { setEditOpen(o => !o); setAddError(null); setAddInput(""); }}
+          style={{
+            padding: "3px 10px", fontFamily: "Courier New", fontSize: "0.72rem", fontWeight: 700,
+            border: `1px solid ${editOpen ? "var(--teal)" : "rgba(8,120,164,0.35)"}`,
+            borderRadius: 4,
+            background: editOpen ? "rgba(30,207,214,0.12)" : "transparent",
+            color: editOpen ? "var(--teal)" : "var(--dim)",
+            cursor: "pointer",
+          }}
+        >
+          {editOpen ? "▲ 收起" : "＋ 編輯清單"}
+        </button>
         <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
           {([
             [{ col: "pct",    dir: "desc" } as SortState, "漲幅↓"],
@@ -101,6 +164,76 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
           })}
         </span>
       </div>
+
+      {/* Edit panel */}
+      {editOpen && (
+        <div style={{
+          background: "rgba(8,120,164,0.06)", border: "1px solid rgba(8,120,164,0.25)",
+          borderRadius: 8, padding: "14px 16px", marginBottom: 16,
+        }}>
+          {/* Existing tickers as chips */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+            {tickers.map(t => (
+              <span key={t} style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: "rgba(30,207,214,0.1)", border: "1px solid rgba(30,207,214,0.3)",
+                borderRadius: 4, padding: "2px 8px",
+                fontFamily: "Courier New", fontSize: "0.75rem", color: "var(--teal)",
+              }}>
+                {displayName(t)}
+                {tickers.length > 1 && (
+                  <button
+                    onClick={() => handleRemove(t)}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "var(--dim)", fontSize: "0.72rem", padding: 0, lineHeight: 1,
+                    }}
+                    title={`移除 ${displayName(t)}`}
+                  >✕</button>
+                )}
+              </span>
+            ))}
+          </div>
+
+          {/* Add new ticker */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              ref={inputRef}
+              value={addInput}
+              onChange={e => { setAddInput(e.target.value.toUpperCase()); setAddError(null); }}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="輸入代號，如 BTC 或 ETH-USD"
+              style={{
+                background: "rgba(0,24,40,0.8)", border: "1px solid rgba(8,120,164,0.4)",
+                borderRadius: 4, padding: "5px 10px",
+                fontFamily: "Courier New", fontSize: "0.78rem", color: "var(--text)",
+                width: 220, outline: "none",
+              }}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={addLoading || !addInput.trim()}
+              style={{
+                padding: "5px 14px", fontFamily: "Courier New", fontSize: "0.78rem", fontWeight: 700,
+                border: "1px solid rgba(30,207,214,0.5)", borderRadius: 4,
+                background: "rgba(30,207,214,0.12)", color: "var(--teal)",
+                cursor: addLoading || !addInput.trim() ? "not-allowed" : "pointer",
+                opacity: addLoading || !addInput.trim() ? 0.5 : 1,
+              }}
+            >
+              {addLoading ? "驗證中…" : "新增"}
+            </button>
+          </div>
+          {addError && (
+            <div style={{ marginTop: 6, fontFamily: "Courier New", fontSize: "0.72rem", color: "#C05640" }}>
+              {addError}
+            </div>
+          )}
+          <div style={{ marginTop: 8, fontFamily: "Courier New", fontSize: "0.68rem", color: "var(--dim)" }}>
+            支援 Yahoo Finance 格式：BTC、ETH-USD、PEPE-USD 等
+          </div>
+        </div>
+      )}
 
       {/* Cards grid */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>

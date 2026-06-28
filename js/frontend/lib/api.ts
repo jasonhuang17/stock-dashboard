@@ -118,10 +118,13 @@ export const api = {
     get<{ exists: boolean; resolved: string | null }>(`/api/validate/tw/${encodeURIComponent(ticker)}`),
 
   getSettings: () =>
-    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string> }>("/api/settings"),
+    get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[] }>("/api/settings"),
 
-  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string> }) =>
+  setSettings: (patch: { use_mock?: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[] }) =>
     put<{ use_mock: boolean }>("/api/settings", patch),
+
+  validateCrypto: (ticker: string) =>
+    get<{ valid: boolean; ticker: string }>(`/api/validate/crypto/${encodeURIComponent(ticker)}`),
 
   // Account CRUD
   createAccount: (name: string, currency: "USD" | "TWD") =>
