@@ -404,7 +404,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                   const ds = divStyle(idx);
                   if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400, ...ds }}>合計</td>;
                   if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}</td>;
-                  if (c.key === "unreal_gain") return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}</td>;
+                  if (c.key === "unreal_gain") { const pct = totalCost ? totalUnreal / totalCost * 100 : null; return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}{pct !== null ? ` (${fmtPct(pct)})` : ""}</td>; }
                   if (c.key === "cost_basis")    return <td key="cost_basis"    style={{ color: "var(--gold)", ...ds }}>{fmtMoney(totalCost, currency)}</td>;
                   if ((c.key as string) === "market_value") return <td key="market_value"  style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalMV, currency)}</td>;
                   return <td key={c.key} style={ds} />;
