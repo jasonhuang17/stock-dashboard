@@ -666,32 +666,39 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   const twdGroups = savedGroups.filter(g => g.accounts.some(k => k in portfolio && (portfolio[k] as Account).currency === "TWD"));
   const hasGroups = usdGroups.length > 0 || twdGroups.length > 0;
 
+  const groupDivider = <div style={{ margin: "20px 0", borderTop: "2px solid rgba(30,207,214,0.25)", borderRadius: 1 }} />;
+  const sectionDivider = <div style={{ margin: "32px 0 28px", borderTop: "2px solid rgba(237,209,112,0.35)", borderRadius: 1 }} />;
+
   function renderSection(currency: Currency, label: string, allRows: PortfolioRow[], accts: { key: string; currency: Currency }[], groups: AccountGroup[], top: boolean) {
     if (!allRows.length) return null;
+    const visibleGroups = groups
+      .map((group, gi) => {
+        const relevantKeys = group.accounts.filter(k => k in portfolio && (portfolio[k] as Account).currency === currency);
+        const rows = relevantKeys.flatMap(k => rowMap[k] ?? []);
+        return rows.length ? { group, gi, relevantKeys, rows } : null;
+      })
+      .filter(Boolean) as { group: AccountGroup; gi: number; relevantKeys: string[]; rows: PortfolioRow[] }[];
+
     return (
-      <div style={{ marginTop: top ? 0 : 24 }}>
+      <div style={{ marginTop: top ? 0 : 0 }}>
         {sectionTitle(label)}
-        {groups.length > 0
-          ? groups.map((group, gi) => {
-              const relevantKeys = group.accounts.filter(k => k in portfolio && (portfolio[k] as Account).currency === currency);
-              const rows = relevantKeys.flatMap(k => rowMap[k] ?? []);
-              if (!rows.length) return null;
-              return (
-                <div key={gi} style={{ marginBottom: 20 }}>
-                  {groupTitle(group.name)}
-                  {relevantKeys.map(k => {
-                    const krows = rowMap[k] ?? [];
-                    return krows.length ? (
-                      <div key={k} style={{ marginBottom: 16 }}>
-                        <PnLTable rows={krows} currency={currency} label={k} />
-                      </div>
-                    ) : null;
-                  })}
-                  <OverallSummaryBar rows={rows} currency={currency} label={group.name} variant="group" />
-                  <PnLChart rows={rows} currency={currency} />
-                </div>
-              );
-            })
+        {visibleGroups.length > 0
+          ? visibleGroups.map((item, idx) => (
+              <div key={item.gi}>
+                {groupTitle(item.group.name)}
+                {item.relevantKeys.map(k => {
+                  const krows = rowMap[k] ?? [];
+                  return krows.length ? (
+                    <div key={k} style={{ marginBottom: 16 }}>
+                      <PnLTable rows={krows} currency={currency} label={k} />
+                    </div>
+                  ) : null;
+                })}
+                <OverallSummaryBar rows={item.rows} currency={currency} label={item.group.name} variant="group" />
+                <PnLChart rows={item.rows} currency={currency} />
+                {idx < visibleGroups.length - 1 && groupDivider}
+              </div>
+            ))
           : accts.map(a => {
               const rows = rowMap[a.key] ?? [];
               return rows.length ? (
@@ -701,8 +708,10 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
               ) : null;
             })
         }
-        <OverallSummaryBar rows={allRows} currency={currency} label={`${groups.length > 0 ? label.replace(` (${currency})`, "") : label.replace(` (${currency})`, "")} 合計`} variant="total" />
-        <PnLChart rows={allRows} currency={currency} />
+        <div style={{ marginTop: visibleGroups.length > 0 ? 20 : 0 }}>
+          <OverallSummaryBar rows={allRows} currency={currency} label={`${label.replace(` (${currency})`, "")} 合計`} variant="total" />
+          <PnLChart rows={allRows} currency={currency} />
+        </div>
       </div>
     );
   }
@@ -790,6 +799,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
       )}
 
       {renderSection("USD", "美股市場 (USD)", allUSD, usdAccts, usdGroups, true)}
+      {allUSD.length > 0 && allTWD.length > 0 && sectionDivider}
       {renderSection("TWD", "台股市場 (TWD)", allTWD, twdAccts, twdGroups, !allUSD.length)}
     </div>
   );
