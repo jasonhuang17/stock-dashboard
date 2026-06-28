@@ -76,16 +76,18 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
               </div>
             )}
           </div>
-          <div>
-            <div className="summary-label">未實現損益</div>
-            <div className={`summary-value ${totalUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalUnreal, currency)}</div>
-          </div>
-          {unrealPct !== null && (
+          <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
             <div>
-              <div className="summary-label">未實現 %</div>
-              <div className={`summary-value ${unrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(unrealPct)}</div>
+              <div className="summary-label">未實現損益</div>
+              <div className={`summary-value ${totalUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalUnreal, currency)}</div>
             </div>
-          )}
+            {unrealPct !== null && (
+              <div>
+                <div className="summary-label">未實現 %</div>
+                <div className={`summary-value ${unrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(unrealPct)}</div>
+              </div>
+            )}
+          </div>
           <div>
             <div className="summary-label">總成本</div>
             <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(totalCostBasis, currency)}</div>
@@ -418,8 +420,15 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
 
   const usdTotal   = allUSD.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const usdUnreal  = allUSD.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const usdCost    = allUSD.reduce((s, r) => s + r.cost_basis, 0);
+  const usdMV      = allUSD.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+  const usdUnrealPct = usdCost ? usdUnreal / usdCost * 100 : null;
+
   const twdTotal   = allTWD.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
   const twdUnreal  = allTWD.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const twdCost    = allTWD.reduce((s, r) => s + r.cost_basis, 0);
+  const twdMV      = allTWD.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+  const twdUnrealPct = twdCost ? twdUnreal / twdCost * 100 : null;
 
   if (!allUSD.length && !allTWD.length)
     return <div style={{ padding: 20, color: "var(--dim)", fontSize: "0.82rem" }}>尚無持倉，請先在各帳戶分頁新增。</div>;
@@ -444,13 +453,31 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
             ) : null;
           })}
           <div className="summary-bar" style={{ marginTop: 8 }}>
-            <div>
-              <div className="summary-label">美股今日合計</div>
-              <div className={`summary-value ${usdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdTotal, "USD")}</div>
+            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+              <div>
+                <div className="summary-label">美股今日合計</div>
+                <div className={`summary-value ${usdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdTotal, "USD")}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+              <div>
+                <div className="summary-label">未實現合計</div>
+                <div className={`summary-value ${usdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdUnreal, "USD")}</div>
+              </div>
+              {usdUnrealPct !== null && (
+                <div>
+                  <div className="summary-label">未實現 %</div>
+                  <div className={`summary-value ${usdUnrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(usdUnrealPct)}</div>
+                </div>
+              )}
             </div>
             <div>
-              <div className="summary-label">未實現合計</div>
-              <div className={`summary-value ${usdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(usdUnreal, "USD")}</div>
+              <div className="summary-label">總成本</div>
+              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(usdCost, "USD")}</div>
+            </div>
+            <div>
+              <div className="summary-label">總市值</div>
+              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(usdMV, "USD")}</div>
             </div>
           </div>
           <PnLChart rows={allUSD} currency="USD" />
@@ -468,13 +495,31 @@ function OverallTab({ portfolio, refreshKey }: { portfolio: Portfolio; refreshKe
             ) : null;
           })}
           <div className="summary-bar" style={{ marginTop: 8 }}>
-            <div>
-              <div className="summary-label">台股今日合計</div>
-              <div className={`summary-value ${twdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdTotal, "TWD")}</div>
+            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+              <div>
+                <div className="summary-label">台股今日合計</div>
+                <div className={`summary-value ${twdTotal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdTotal, "TWD")}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+              <div>
+                <div className="summary-label">未實現合計</div>
+                <div className={`summary-value ${twdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdUnreal, "TWD")}</div>
+              </div>
+              {twdUnrealPct !== null && (
+                <div>
+                  <div className="summary-label">未實現 %</div>
+                  <div className={`summary-value ${twdUnrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(twdUnrealPct)}</div>
+                </div>
+              )}
             </div>
             <div>
-              <div className="summary-label">未實現合計</div>
-              <div className={`summary-value ${twdUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(twdUnreal, "TWD")}</div>
+              <div className="summary-label">總成本</div>
+              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(twdCost, "TWD")}</div>
+            </div>
+            <div>
+              <div className="summary-label">總市值</div>
+              <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(twdMV, "TWD")}</div>
             </div>
           </div>
           <PnLChart rows={allTWD} currency="TWD" />

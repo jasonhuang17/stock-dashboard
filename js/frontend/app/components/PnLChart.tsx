@@ -211,6 +211,8 @@ function BarChartView({ rows, currency, mode }: { rows: PortfolioRow[]; currency
         <YAxis type="category" dataKey="displayName" tick={{ fill: "#1ECFD6", fontSize: hasTwNames ? 10 : 11, fontFamily: "Courier New", fontWeight: 700 }} width={hasTwNames ? 110 : 55} />
         <Tooltip
           contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 12 }}
+          labelStyle={{ color: "#1ECFD6" }}
+          itemStyle={{ color: "#d4eaf5" }}
           formatter={(v: unknown) => { const n = v as number; return [`${sym}${n.toFixed(2)}`, label] as [string, string]; }}
         />
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.3)" />
