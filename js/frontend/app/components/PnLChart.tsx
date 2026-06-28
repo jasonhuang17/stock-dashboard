@@ -201,8 +201,8 @@ function BarChartView({ rows, currency, mode }: { rows: PortfolioRow[]; currency
   const xVals = data.map(d => (d[field] as number | null) ?? 0);
   const xMax = Math.max(...xVals, 0);
   const xMin = Math.min(...xVals, 0);
-  const xPad = Math.max(Math.abs(xMax - xMin) * 0.25, 1);
-  const xDomain: [number, number] = [xMin - xPad * 0.5, xMax + xPad];
+  const xPad = Math.max(Math.abs(xMax - xMin) * 0.28, 1);
+  const xDomain: [number, number] = [xMin - xPad, xMax + xPad];
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 36)}>

@@ -47,11 +47,16 @@ function NormalizedBar({ quotes }: { quotes: Quote[] }) {
   const sorted = [...valid].sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
   const max = Math.max(...sorted.map(q => Math.abs(q.pct ?? 0)), 0.01);
   const data = sorted.map(q => ({ name: q.ticker, value: (q.pct ?? 0) / max * 100, pct: q.pct ?? 0 }));
+  const xVals = data.map(d => d.value);
+  const xMin = Math.min(...xVals, 0);
+  const xMax = Math.max(...xVals, 0);
+  const xPad = Math.max((xMax - xMin) * 0.28, 12);
+  const xDomain: [number, number] = [xMin - xPad, xMax + xPad];
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(180, sorted.length * 34)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 60, left: 10, bottom: 4 }}>
-        <XAxis type="number" hide domain={[-100, 100]} />
+        <XAxis type="number" hide domain={xDomain} />
         <YAxis type="category" dataKey="name" tick={{ fill: "#1ECFD6", fontSize: 11, fontFamily: "Courier New", fontWeight: 700 }} width={55} />
         <ReferenceLine x={0} stroke="rgba(8,120,164,0.4)" />
         <Tooltip
