@@ -826,6 +826,7 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
         <button className={`tab-btn${acctTab === 0 ? " active" : ""}`} onClick={() => { setAcctTab(0); sessionStorage.setItem("portfolio-acct-tab", "0"); }}>
           📊 整體損益
         </button>
+        <div style={{ width: 1, background: "rgba(30,207,214,0.25)", alignSelf: "stretch", margin: "2px 4px" }} />
         <DndContext sensors={acctSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
           const { active, over } = event;
           if (over && active.id !== over.id) {
