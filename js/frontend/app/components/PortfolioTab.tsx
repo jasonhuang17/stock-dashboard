@@ -605,7 +605,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
               <input
                 value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addGroup()}
+                onKeyDown={e => e.key === "Enter" && !e.nativeEvent.isComposing && addGroup()}
                 placeholder="新分組名稱…"
                 style={{ background: "#001d3a", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, color: "var(--text)", fontSize: "0.78rem", padding: "3px 8px", outline: "none", width: 160, fontFamily: "Courier New" }}
               />
