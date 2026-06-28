@@ -69,4 +69,5 @@ export interface SortState {
 export interface AccountGroup {
   name: string;
   accounts: string[];
+  locked?: boolean;
 }

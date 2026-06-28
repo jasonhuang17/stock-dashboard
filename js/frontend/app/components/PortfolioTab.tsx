@@ -10,7 +10,7 @@ import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 type Currency = "USD" | "TWD";
@@ -421,52 +421,145 @@ function ManageTab({
 }
 
 // ── Overall summary (all accounts, dynamic) ───────────────────────────────────
-// Reusable summary bar for a set of rows in a given currency
-function OverallSummaryBar({ rows, currency, label }: { rows: PortfolioRow[]; currency: Currency; label: string }) {
-  const total    = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
-  const unreal   = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const cost     = rows.reduce((s, r) => s + r.cost_basis, 0);
-  const mv       = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+// Summary bar — variant "group" = teal/normal, variant "total" = gold/larger
+function OverallSummaryBar({ rows, currency, label, variant = "group" }: {
+  rows: PortfolioRow[]; currency: Currency; label: string; variant?: "group" | "total";
+}) {
+  const total     = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
+  const unreal    = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const cost      = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const mv        = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
   const unrealPct = cost ? unreal / cost * 100 : null;
+  const prevValue = rows.reduce((s, r) => s + (r.prev_close !== null ? r.prev_close * r.shares : 0), 0);
+  const totalPct  = prevValue > 0 ? total / prevValue * 100 : null;
+
+  const isTotal   = variant === "total";
+  const lblClr    = isTotal ? "rgba(237,209,112,0.65)" : undefined;
+  const staticClr = isTotal ? "var(--gold)" : "var(--text)";
+  const valSz     = isTotal ? "1.05rem" : undefined;
+
   return (
-    <div className="summary-bar" style={{ marginTop: 8 }}>
-      <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
+    <div className="summary-bar" style={{ marginTop: 8, ...(isTotal && { borderColor: "rgba(237,209,112,0.25)", background: "rgba(237,209,112,0.05)" }) }}>
+      <div style={{ display: "flex", gap: 16, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
         <div>
-          <div className="summary-label">{label} 今日損益</div>
-          <div className={`summary-value ${total >= 0 ? "pos" : "neg"}`}>{fmtMoney(total, currency)}</div>
+          <div className="summary-label" style={lblClr ? { color: lblClr } : undefined}>{label} 今日損益</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
+            <div className={`summary-value ${total >= 0 ? "pos" : "neg"}`} style={valSz ? { fontSize: valSz } : undefined}>{fmtMoney(total, currency)}</div>
+            {totalPct !== null && (
+              <span className={totalPct >= 0 ? "pos" : "neg"} style={{ fontSize: "0.76rem", fontWeight: 600 }}>
+                {totalPct >= 0 ? "+" : ""}{totalPct.toFixed(2)}%
+              </span>
+            )}
+          </div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
         <div>
-          <div className="summary-label">未實現損益</div>
-          <div className={`summary-value ${unreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(unreal, currency)}</div>
+          <div className="summary-label" style={lblClr ? { color: lblClr } : undefined}>未實現損益</div>
+          <div className={`summary-value ${unreal >= 0 ? "pos" : "neg"}`} style={valSz ? { fontSize: valSz } : undefined}>{fmtMoney(unreal, currency)}</div>
         </div>
         {unrealPct !== null && (
           <div>
-            <div className="summary-label">未實現 %</div>
+            <div className="summary-label" style={lblClr ? { color: lblClr } : undefined}>未實現 %</div>
             <div className={`summary-value ${unrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(unrealPct)}</div>
           </div>
         )}
       </div>
       <div>
-        <div className="summary-label">總成本</div>
-        <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(cost, currency)}</div>
+        <div className="summary-label" style={lblClr ? { color: lblClr } : undefined}>總成本</div>
+        <div className="summary-value" style={{ color: staticClr, ...(valSz && { fontSize: valSz }) }}>{fmtMoney(cost, currency)}</div>
       </div>
       <div>
-        <div className="summary-label">總市值</div>
-        <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(mv, currency)}</div>
+        <div className="summary-label" style={lblClr ? { color: lblClr } : undefined}>總市值</div>
+        <div className="summary-value" style={{ color: staticClr, ...(valSz && { fontSize: valSz }) }}>{fmtMoney(mv, currency)}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sortable group row for the edit panel ─────────────────────────────────────
+function SortableGroupRow({ group, idx, allAccounts, portfolio, useMock, takenAccounts, onRename, onDelete, onToggleAccount, onToggleLock }: {
+  group: AccountGroup; idx: number;
+  allAccounts: { key: string; currency: Currency }[];
+  portfolio: Portfolio; useMock: boolean; takenAccounts: Set<string>;
+  onRename: (idx: number, name: string) => void;
+  onDelete: (idx: number) => void;
+  onToggleAccount: (groupIdx: number, key: string, checked: boolean) => void;
+  onToggleLock: (idx: number) => void;
+}) {
+  const [nameVal, setNameVal] = useState(group.name);
+  useEffect(() => { setNameVal(group.name); }, [group.name]);
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.name });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  const validAccts = group.accounts.filter(k => k in portfolio);
+  const groupCurrencies = new Set(validAccts.map(k => (portfolio[k] as Account).currency));
+  const groupCurrency: Currency | null = groupCurrencies.size === 1 ? [...groupCurrencies][0] as Currency : null;
+
+  function commitRename() {
+    const name = nameVal.trim();
+    if (name && name !== group.name) onRename(idx, name);
+    else setNameVal(group.name);
+  }
+
+  return (
+    <div ref={setNodeRef} style={{ ...style, paddingTop: 12, paddingBottom: 12, borderBottom: "1px solid rgba(30,207,214,0.1)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span {...attributes} {...listeners}
+          style={{ cursor: isDragging ? "grabbing" : "grab", color: "var(--dim)", fontSize: "1rem", userSelect: "none", lineHeight: 1, touchAction: "none" }}>
+          ⠿
+        </span>
+        <input value={nameVal} onChange={e => setNameVal(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { commitRename(); (e.target as HTMLInputElement).blur(); } }}
+          disabled={useMock}
+          style={{ background: "#001d3a", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, color: "var(--text)", fontSize: "0.78rem", padding: "3px 8px", outline: "none", width: 160, fontFamily: "Courier New" }} />
+        {groupCurrency && <span style={{ fontSize: "0.65rem", color: "var(--dim)", opacity: 0.6 }}>({groupCurrency})</span>}
+        <LockTip text={group.locked ? "已鎖定：無法刪除此分組（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}>
+          <button onClick={() => !useMock && onToggleLock(idx)}
+            style={{ background: "none", border: "none", cursor: useMock ? "not-allowed" : "pointer", fontSize: "0.78rem", padding: "0 2px", opacity: group.locked ? 1 : 0.35, color: group.locked ? "var(--teal)" : "var(--dim)" }}>
+            {group.locked ? "🔒" : "🔓"}
+          </button>
+        </LockTip>
+        {!useMock && !group.locked && (
+          <button onClick={() => onDelete(idx)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dim)", fontSize: "0.8rem", padding: "0 2px", marginLeft: "auto" }}>
+            ✕
+          </button>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingLeft: 22 }}>
+        {allAccounts.map(a => {
+          const isChecked = group.accounts.includes(a.key);
+          const inOther   = !isChecked && takenAccounts.has(a.key);
+          const badCcy    = !isChecked && groupCurrency !== null && a.currency !== groupCurrency;
+          const disabled  = useMock || inOther || badCcy;
+          return (
+            <label key={a.key} title={inOther ? "此帳戶已在其他分組中" : undefined}
+              style={{ display: "flex", alignItems: "center", gap: 5, cursor: disabled ? "not-allowed" : "pointer",
+                fontSize: "0.74rem", color: isChecked ? "var(--teal)" : disabled ? "rgba(100,130,160,0.25)" : "var(--dim)" }}>
+              <input type="checkbox" checked={isChecked} disabled={disabled}
+                onChange={e => onToggleAccount(idx, a.key, e.target.checked)}
+                style={{ accentColor: "var(--teal)", cursor: disabled ? "not-allowed" : "pointer" }} />
+              {a.key}
+              <span style={{ fontSize: "0.65rem", opacity: 0.5 }}>({a.currency})</span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; refreshKey: number; useMock: boolean }) {
-  const [rowMap, setRowMap]       = useState<Record<string, PortfolioRow[]>>({});
-  const [loading, setLoading]     = useState(true);
-  const [accountGroups, setAccountGroups] = useState<AccountGroup[]>([]);
-  const [editOpen, setEditOpen]   = useState(false);
+  const [rowMap, setRowMap]           = useState<Record<string, PortfolioRow[]>>({});
+  const [loading, setLoading]         = useState(true);
+  const [savedGroups, setSavedGroups] = useState<AccountGroup[]>([]);
+  const [draftGroups, setDraftGroups] = useState<AccountGroup[]>([]);
+  const [isDirty, setIsDirty]         = useState(false);
+  const [editOpen, setEditOpen]       = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const [editingNames, setEditingNames] = useState<string[]>([]);
 
   const accounts = Object.entries(portfolio).map(([key, acct]) => ({
     key, currency: (acct as Account).currency,
@@ -486,53 +579,72 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   useEffect(() => {
     api.getSettings().then(s => {
       const groups = s.account_groups ?? [];
-      setAccountGroups(groups);
-      setEditingNames(groups.map(g => g.name));
+      setSavedGroups(groups);
+      setDraftGroups(groups);
     }).catch(() => {});
   }, []);
 
-  async function saveGroups(groups: AccountGroup[]) {
-    setAccountGroups(groups);
-    setEditingNames(groups.map(g => g.name));
-    await api.setSettings({ account_groups: groups });
+  function markDirty(groups: AccountGroup[]) {
+    setDraftGroups(groups);
+    setIsDirty(true);
   }
 
-  async function addGroup() {
+  async function handleSave() {
+    setSavedGroups(draftGroups);
+    setIsDirty(false);
+    await api.setSettings({ account_groups: draftGroups });
+  }
+
+  function handleCancel() {
+    setDraftGroups(savedGroups);
+    setIsDirty(false);
+  }
+
+  function addGroup() {
     const name = newGroupName.trim();
     if (!name) return;
-    const next = [...accountGroups, { name, accounts: [] }];
     setNewGroupName("");
-    await saveGroups(next);
+    markDirty([...draftGroups, { name, accounts: [] }]);
   }
 
-  async function deleteGroup(idx: number) {
-    await saveGroups(accountGroups.filter((_, i) => i !== idx));
+  function deleteGroup(idx: number) {
+    markDirty(draftGroups.filter((_, i) => i !== idx));
   }
 
-  async function renameGroup(idx: number) {
-    const name = (editingNames[idx] ?? "").trim();
-    if (!name || name === accountGroups[idx]?.name) return;
-    const next = accountGroups.map((g, i) => i === idx ? { ...g, name } : g);
-    await saveGroups(next);
+  function renameGroup(idx: number, name: string) {
+    if (!name || name === draftGroups[idx]?.name) return;
+    markDirty(draftGroups.map((g, i) => i === idx ? { ...g, name } : g));
   }
 
-  async function toggleAccount(groupIdx: number, acctKey: string, checked: boolean) {
-    const next = accountGroups.map((g, i) => {
+  function toggleAccount(groupIdx: number, acctKey: string, checked: boolean) {
+    markDirty(draftGroups.map((g, i) => {
       if (i !== groupIdx) return g;
-      const accounts = checked
-        ? [...g.accounts, acctKey]
-        : g.accounts.filter(a => a !== acctKey);
-      return { ...g, accounts };
-    });
-    await saveGroups(next);
+      const accts = checked ? [...g.accounts, acctKey] : g.accounts.filter(a => a !== acctKey);
+      return { ...g, accounts: accts };
+    }));
+  }
+
+  function toggleLock(idx: number) {
+    markDirty(draftGroups.map((g, i) => i === idx ? { ...g, locked: !g.locked } : g));
+  }
+
+  const groupSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  function handleGroupDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = draftGroups.findIndex(g => g.name === active.id);
+    const newIdx = draftGroups.findIndex(g => g.name === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    markDirty(arrayMove(draftGroups, oldIdx, newIdx));
   }
 
   if (loading) return <div style={{ padding: 20, color: "var(--dim)" }}>載入中… <span className="spinner" /></div>;
 
   const usdAccts = accounts.filter(a => a.currency === "USD");
   const twdAccts = accounts.filter(a => a.currency === "TWD");
-  const allUSD = usdAccts.flatMap(a => rowMap[a.key] ?? []);
-  const allTWD = twdAccts.flatMap(a => rowMap[a.key] ?? []);
+  const allUSD   = usdAccts.flatMap(a => rowMap[a.key] ?? []);
+  const allTWD   = twdAccts.flatMap(a => rowMap[a.key] ?? []);
 
   if (!allUSD.length && !allTWD.length)
     return <div style={{ padding: 20, color: "var(--dim)", fontSize: "0.82rem" }}>尚無持倉，請先在各帳戶分頁新增。</div>;
@@ -549,59 +661,94 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
     </div>
   );
 
-  const hasGroups = accountGroups.length > 0;
+  // Groups that have accounts of a given currency (for display sectioning)
+  const usdGroups = savedGroups.filter(g => g.accounts.some(k => k in portfolio && (portfolio[k] as Account).currency === "USD"));
+  const twdGroups = savedGroups.filter(g => g.accounts.some(k => k in portfolio && (portfolio[k] as Account).currency === "TWD"));
+  const hasGroups = usdGroups.length > 0 || twdGroups.length > 0;
+
+  function renderSection(currency: Currency, label: string, allRows: PortfolioRow[], accts: { key: string; currency: Currency }[], groups: AccountGroup[], top: boolean) {
+    if (!allRows.length) return null;
+    return (
+      <div style={{ marginTop: top ? 0 : 24 }}>
+        {sectionTitle(label)}
+        {groups.length > 0
+          ? groups.map((group, gi) => {
+              const relevantKeys = group.accounts.filter(k => k in portfolio && (portfolio[k] as Account).currency === currency);
+              const rows = relevantKeys.flatMap(k => rowMap[k] ?? []);
+              if (!rows.length) return null;
+              return (
+                <div key={gi} style={{ marginBottom: 20 }}>
+                  {groupTitle(group.name)}
+                  {relevantKeys.map(k => {
+                    const krows = rowMap[k] ?? [];
+                    return krows.length ? (
+                      <div key={k} style={{ marginBottom: 16 }}>
+                        <PnLTable rows={krows} currency={currency} label={k} />
+                      </div>
+                    ) : null;
+                  })}
+                  <OverallSummaryBar rows={rows} currency={currency} label={group.name} variant="group" />
+                </div>
+              );
+            })
+          : accts.map(a => {
+              const rows = rowMap[a.key] ?? [];
+              return rows.length ? (
+                <div key={a.key} style={{ marginBottom: 16 }}>
+                  <PnLTable rows={rows} currency={currency} label={a.key} />
+                </div>
+              ) : null;
+            })
+        }
+        <OverallSummaryBar rows={allRows} currency={currency} label={`${groups.length > 0 ? label.replace(` (${currency})`, "") : label.replace(` (${currency})`, "")} 合計`} variant="total" />
+        <PnLChart rows={allRows} currency={currency} />
+      </div>
+    );
+  }
 
   return (
     <div>
       {/* Group management toggle */}
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
         <button onClick={() => setEditOpen(v => !v)}
           style={{ background: "none", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, cursor: "pointer", color: "var(--dim)", fontSize: "0.72rem", padding: "3px 10px" }}>
           ⚙ {editOpen ? "收起分組設定" : "管理帳號分組"}
         </button>
+        {isDirty && !editOpen && (
+          <span style={{ fontSize: "0.72rem", color: "rgba(237,209,112,0.7)" }}>● 有未儲存的變更</span>
+        )}
       </div>
 
       {editOpen && (
         <div style={{ background: "rgba(0,24,40,0.8)", border: "1px solid rgba(30,207,214,0.2)", borderRadius: 6, padding: 16, marginBottom: 20 }}>
-          {accountGroups.length === 0 && (
+          {draftGroups.length === 0 && (
             <div style={{ color: "var(--dim)", fontSize: "0.75rem", marginBottom: 12 }}>尚無分組，點擊下方新增第一個分組。</div>
           )}
-          {accountGroups.map((group, gi) => (
-            <div key={gi} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: gi < accountGroups.length - 1 ? "1px solid rgba(30,207,214,0.1)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <input
-                  value={editingNames[gi] ?? group.name}
-                  onChange={e => setEditingNames(prev => prev.map((n, i) => i === gi ? e.target.value : n))}
-                  onBlur={() => renameGroup(gi)}
-                  onKeyDown={e => e.key === "Enter" && renameGroup(gi)}
-                  style={{ background: "#001d3a", border: "1px solid rgba(30,207,214,0.3)", borderRadius: 4, color: "var(--text)", fontSize: "0.78rem", padding: "3px 8px", outline: "none", width: 180, fontFamily: "Courier New" }}
-                />
-                {!useMock && (
-                  <button onClick={() => deleteGroup(gi)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dim)", fontSize: "0.8rem", padding: "0 4px" }}>
-                    ✕
-                  </button>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {accounts.map(a => (
-                  <label key={a.key} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: "0.74rem", color: group.accounts.includes(a.key) ? "var(--teal)" : "var(--dim)" }}>
-                    <input
-                      type="checkbox"
-                      checked={group.accounts.includes(a.key)}
-                      disabled={useMock}
-                      onChange={e => toggleAccount(gi, a.key, e.target.checked)}
-                      style={{ accentColor: "var(--teal)", cursor: "pointer" }}
-                    />
-                    {a.key}
-                    <span style={{ fontSize: "0.65rem", opacity: 0.6 }}>({a.currency})</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+
+          <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+            <SortableContext items={draftGroups.map(g => g.name)} strategy={verticalListSortingStrategy}>
+              {draftGroups.map((group, gi) => {
+                const takenAccounts = new Set(draftGroups.flatMap((g, i) => i !== gi ? g.accounts : []));
+                return (
+                  <SortableGroupRow
+                    key={gi}
+                    group={group} idx={gi}
+                    allAccounts={accounts}
+                    portfolio={portfolio}
+                    useMock={useMock}
+                    takenAccounts={takenAccounts}
+                    onRename={renameGroup}
+                    onDelete={deleteGroup}
+                    onToggleAccount={toggleAccount}
+                    onToggleLock={toggleLock}
+                  />
+                );
+              })}
+            </SortableContext>
+          </DndContext>
+
           {!useMock && (
-            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <input
                 value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
@@ -615,65 +762,34 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
               </button>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Custom groups */}
-      {hasGroups && accountGroups.map((group, gi) => {
-        const acctKeys = group.accounts.filter(k => k in portfolio);
-        if (!acctKeys.length) return null;
-        const acctInfos = acctKeys.map(k => ({ key: k, currency: (portfolio[k] as Account).currency }));
-        const groupUSD = acctInfos.filter(a => a.currency === "USD").flatMap(a => rowMap[a.key] ?? []);
-        const groupTWD = acctInfos.filter(a => a.currency === "TWD").flatMap(a => rowMap[a.key] ?? []);
-        if (!groupUSD.length && !groupTWD.length) return null;
-        return (
-          <div key={gi} style={{ marginBottom: 24 }}>
-            {groupTitle(group.name)}
-            {acctInfos.map(a => {
-              const rows = rowMap[a.key] ?? [];
-              return rows.length ? (
-                <div key={a.key} style={{ marginBottom: 16 }}>
-                  <PnLTable rows={rows} currency={a.currency} label={a.key} />
-                </div>
-              ) : null;
-            })}
-            {groupUSD.length > 0 && <OverallSummaryBar rows={groupUSD} currency="USD" label={`${group.name} (USD)`} />}
-            {groupTWD.length > 0 && <OverallSummaryBar rows={groupTWD} currency="TWD" label={`${group.name} (TWD)`} />}
+          <div style={{ display: "flex", gap: 8, marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(30,207,214,0.15)" }}>
+            <button onClick={handleSave} disabled={!isDirty || useMock}
+              style={{
+                background: isDirty && !useMock ? "rgba(30,207,214,0.15)" : "none",
+                border: `1px solid ${isDirty && !useMock ? "rgba(30,207,214,0.5)" : "rgba(30,207,214,0.15)"}`,
+                borderRadius: 4, cursor: isDirty && !useMock ? "pointer" : "not-allowed",
+                color: isDirty && !useMock ? "var(--teal)" : "var(--dim)",
+                fontSize: "0.78rem", padding: "4px 14px", fontFamily: "Courier New",
+              }}>
+              儲存
+            </button>
+            <button onClick={handleCancel} disabled={!isDirty}
+              style={{
+                background: "none",
+                border: `1px solid ${isDirty ? "rgba(200,100,80,0.4)" : "rgba(100,100,100,0.2)"}`,
+                borderRadius: 4, cursor: isDirty ? "pointer" : "not-allowed",
+                color: isDirty ? "rgba(200,120,100,0.9)" : "var(--dim)",
+                fontSize: "0.78rem", padding: "4px 14px", fontFamily: "Courier New",
+              }}>
+              取消
+            </button>
           </div>
-        );
-      })}
+        </div>
+      )}
 
-      {/* Overall totals */}
-      {allUSD.length > 0 && (
-        <div style={{ marginTop: hasGroups ? 8 : 0 }}>
-          {sectionTitle(hasGroups ? "美股總計 (USD)" : "美股市場 (USD)")}
-          {!hasGroups && usdAccts.map(a => {
-            const rows = rowMap[a.key] ?? [];
-            return rows.length ? (
-              <div key={a.key} style={{ marginBottom: 16 }}>
-                <PnLTable rows={rows} currency="USD" label={a.key} />
-              </div>
-            ) : null;
-          })}
-          <OverallSummaryBar rows={allUSD} currency="USD" label="美股合計" />
-          <PnLChart rows={allUSD} currency="USD" />
-        </div>
-      )}
-      {allTWD.length > 0 && (
-        <div style={{ marginTop: allUSD.length ? 24 : (hasGroups ? 8 : 0) }}>
-          {sectionTitle(hasGroups ? "台股總計 (TWD)" : "台股市場 (TWD)")}
-          {!hasGroups && twdAccts.map(a => {
-            const rows = rowMap[a.key] ?? [];
-            return rows.length ? (
-              <div key={a.key} style={{ marginBottom: 16 }}>
-                <PnLTable rows={rows} currency="TWD" label={a.key} />
-              </div>
-            ) : null;
-          })}
-          <OverallSummaryBar rows={allTWD} currency="TWD" label="台股合計" />
-          <PnLChart rows={allTWD} currency="TWD" />
-        </div>
-      )}
+      {renderSection("USD", "美股市場 (USD)", allUSD, usdAccts, usdGroups, true)}
+      {renderSection("TWD", "台股市場 (TWD)", allTWD, twdAccts, twdGroups, !allUSD.length)}
     </div>
   );
 }

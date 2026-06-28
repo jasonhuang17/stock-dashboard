@@ -815,7 +815,10 @@ def put_settings(body: SettingsBody):
         groups = []
         for g in body.account_groups:
             if isinstance(g, dict) and isinstance(g.get("name"), str) and isinstance(g.get("accounts"), list):
-                groups.append({"name": g["name"], "accounts": [a for a in g["accounts"] if isinstance(a, str)]})
+                entry = {"name": g["name"], "accounts": [a for a in g["accounts"] if isinstance(a, str)]}
+                if g.get("locked"):
+                    entry["locked"] = True
+                groups.append(entry)
         s["account_groups"] = groups
     save_settings(s)
     return s
