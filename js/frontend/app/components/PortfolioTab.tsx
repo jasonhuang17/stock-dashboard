@@ -666,7 +666,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   const twdGroups = savedGroups.filter(g => g.accounts.some(k => k in portfolio && (portfolio[k] as Account).currency === "TWD"));
   const hasGroups = usdGroups.length > 0 || twdGroups.length > 0;
 
-  const groupDivider = <div style={{ margin: "20px 0", borderTop: "2px solid rgba(30,207,214,0.25)", borderRadius: 1 }} />;
+  const groupDivider = <div style={{ margin: "16px 0 36px", borderTop: "2px solid rgba(30,207,214,0.25)", borderRadius: 1 }} />;
   const sectionDivider = <div style={{ margin: "32px 0 28px", borderTop: "2px solid rgba(237,209,112,0.35)", borderRadius: 1 }} />;
 
   function renderSection(currency: Currency, label: string, allRows: PortfolioRow[], accts: { key: string; currency: Currency }[], groups: AccountGroup[], top: boolean) {
@@ -711,7 +711,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
         <div style={{ marginTop: visibleGroups.length > 0 ? 0 : 0 }}>
           {visibleGroups.length > 0 && (
             <>
-              <div style={{ margin: "20px 0 16px", borderTop: "2px solid rgba(237,209,112,0.4)", borderRadius: 1 }} />
+              <div style={{ margin: "24px 0 16px", borderTop: "1px dashed rgba(237,209,112,0.45)" }} />
               <div style={{ fontFamily: "Courier New", color: "var(--gold)", fontSize: "0.88rem", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 10, paddingLeft: 2 }}>
                 ◈ {label.replace(` (${currency})`, "")} 合計
               </div>
