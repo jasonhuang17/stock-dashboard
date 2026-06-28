@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import type { Quote, PremarketQuote, Market } from "@/lib/types";
 import { StockCard, PremarketCard } from "./StockCard";
@@ -7,6 +7,35 @@ import { GroupStats, GroupCharts } from "./GroupCharts";
 import { SortableChips } from "./SortableChips";
 
 type SubTab = "cards" | "pie" | "bar" | "premarket";
+
+function LockTip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [hovered, setHovered] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  return (
+    <span style={{ marginLeft: "auto", display: "inline-flex" }}
+      onMouseEnter={e => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setPos({ x: r.right, y: r.top });
+        setHovered(true);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+      <span style={{
+        position: "fixed", left: pos.x, top: pos.y - 8,
+        transform: "translate(-100%, -100%)",
+        opacity: hovered ? 1 : 0, transition: "opacity 0.12s",
+        pointerEvents: "none", background: "#001828",
+        border: "1px solid rgba(30,207,214,0.3)", color: "var(--text)",
+        fontSize: "0.72rem", fontWeight: 400, letterSpacing: 0,
+        padding: "5px 10px", borderRadius: 5, whiteSpace: "nowrap",
+        zIndex: 400, boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+      }}>
+        {text}
+      </span>
+    </span>
+  );
+}
 
 interface Props {
   groupName: string;
@@ -133,13 +162,14 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
           </button>
         ))}
         {!useMock && (
-          <button onClick={onTogglePin}
-            title={isPinned ? "解除保護（允許刪除）" : "保護群組（防止刪除）"}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer",
-              fontSize: "0.78rem", padding: "0 4px", opacity: isPinned ? 1 : 0.35,
-              color: isPinned ? "var(--teal)" : "var(--dim)" }}>
-            {isPinned ? "🔒" : "🔓"}
-          </button>
+          <LockTip text={isPinned ? "已鎖定：無法刪除此群組（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}>
+            <button onClick={onTogglePin}
+              style={{ background: "none", border: "none", cursor: "pointer",
+                fontSize: "0.78rem", padding: "0 4px", opacity: isPinned ? 1 : 0.35,
+                color: isPinned ? "var(--teal)" : "var(--dim)" }}>
+              {isPinned ? "🔒" : "🔓"}
+            </button>
+          </LockTip>
         )}
       </div>
 
