@@ -26,9 +26,12 @@ const FULL_NAMES: Record<string, string> = {
   "LTC-USD": "Litecoin",   "ATOM-USD": "Cosmos",    "FIL-USD": "Filecoin",
 };
 
+type SortCol = "pct" | "price" | "volume";
+type SortState = { col: SortCol; dir: "asc" | "desc" };
+
 export function CryptoTab({ refreshKey }: { refreshKey: number }) {
   const [coins, setCoins] = useState<Coin[]>([]);
-  const [sort, setSort] = useState<"pct_desc" | "pct_asc" | "vol_desc">("pct_desc");
+  const [sort, setSort] = useState<SortState>({ col: "pct", dir: "desc" });
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -42,9 +45,23 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const sorted = [...coins].sort((a, b) =>
-    sort === "pct_desc" ? b.pct - a.pct : sort === "pct_asc" ? a.pct - b.pct : (b.volume ?? 0) - (a.volume ?? 0)
-  );
+  function onHeaderClick(col: SortCol) {
+    setSort(prev => prev.col === col
+      ? { col, dir: prev.dir === "desc" ? "asc" : "desc" }
+      : { col, dir: "desc" });
+  }
+
+  function ind(col: SortCol) {
+    if (sort.col !== col) return "";
+    return sort.dir === "desc" ? " ↓" : " ↑";
+  }
+
+  const sorted = [...coins].sort((a, b) => {
+    const mul = sort.dir === "desc" ? -1 : 1;
+    if (sort.col === "pct")    return mul * (a.pct - b.pct);
+    if (sort.col === "price")  return mul * (a.price - b.price);
+    return mul * ((a.volume ?? 0) - (b.volume ?? 0));
+  });
 
   if (loading) return <div style={{ padding: 20, color: "var(--dim)" }}>載入中… <span className="spinner" /></div>;
 
@@ -55,15 +72,22 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
           加密貨幣（via Yahoo Finance，資料延遲約 15 秒）
         </span>
         <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-          {([["pct_desc", "漲幅↓"], ["pct_asc", "跌幅↓"], ["vol_desc", "成交量↓"]] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setSort(key)}
-              style={{ padding: "3px 10px", fontFamily: "Courier New", fontSize: "0.72rem", fontWeight: 700,
-                border: `1px solid ${sort === key ? "var(--teal)" : "rgba(8,120,164,0.35)"}`,
-                borderRadius: 4, background: sort === key ? "rgba(30,207,214,0.12)" : "transparent",
-                color: sort === key ? "var(--teal)" : "var(--dim)", cursor: "pointer" }}>
-              {label}
-            </button>
-          ))}
+          {([
+            [{ col: "pct",    dir: "desc" } as SortState, "漲幅↓"],
+            [{ col: "pct",    dir: "asc"  } as SortState, "跌幅↓"],
+            [{ col: "volume", dir: "desc" } as SortState, "成交量↓"],
+          ] as const).map(([s, label]) => {
+            const active = sort.col === s.col && sort.dir === s.dir;
+            return (
+              <button key={label} onClick={() => setSort(s)}
+                style={{ padding: "3px 10px", fontFamily: "Courier New", fontSize: "0.72rem", fontWeight: 700,
+                  border: `1px solid ${active ? "var(--teal)" : "rgba(8,120,164,0.35)"}`,
+                  borderRadius: 4, background: active ? "rgba(30,207,214,0.12)" : "transparent",
+                  color: active ? "var(--teal)" : "var(--dim)", cursor: "pointer" }}>
+                {label}
+              </button>
+            );
+          })}
         </span>
       </div>
 
@@ -103,9 +127,9 @@ export function CryptoTab({ refreshKey }: { refreshKey: number }) {
           <thead>
             <tr>
               <th style={{ textAlign: "left" }}>代號</th>
-              <th>現價</th>
-              <th>漲跌%</th>
-              <th>成交量</th>
+              <th style={{ cursor: "pointer" }} onClick={() => onHeaderClick("price")}>現價{ind("price")}</th>
+              <th style={{ cursor: "pointer" }} onClick={() => onHeaderClick("pct")}>漲跌%{ind("pct")}</th>
+              <th style={{ cursor: "pointer" }} onClick={() => onHeaderClick("volume")}>成交量{ind("volume")}</th>
             </tr>
           </thead>
           <tbody>
