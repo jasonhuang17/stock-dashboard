@@ -67,8 +67,8 @@ function mergeOrder(stored: string[]): OptColId[] {
 }
 
 function buildCols(currency: Currency, optCols: Set<string>, colOrder: OptColId[]): ColDef[] {
-  const sym      = currency === "TWD" ? "NT $" : "USD";
-  const priceSym = currency === "TWD" ? "NT $" : "$";
+  const sym      = currency === "TWD" ? "NT$" : "USD";
+  const priceSym = currency === "TWD" ? "NT$" : "$";
   const d        = currency === "TWD" ? 2 : 3;
 
   const DEFS: Record<string, ColDef> = {
