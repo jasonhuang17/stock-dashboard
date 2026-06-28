@@ -708,7 +708,15 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
               ) : null;
             })
         }
-        <div style={{ marginTop: visibleGroups.length > 0 ? 20 : 0 }}>
+        <div style={{ marginTop: visibleGroups.length > 0 ? 0 : 0 }}>
+          {visibleGroups.length > 0 && (
+            <>
+              <div style={{ margin: "20px 0 16px", borderTop: "2px solid rgba(237,209,112,0.4)", borderRadius: 1 }} />
+              <div style={{ fontFamily: "Courier New", color: "var(--gold)", fontSize: "0.88rem", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 10, paddingLeft: 2 }}>
+                ◈ {label.replace(` (${currency})`, "")} 合計
+              </div>
+            </>
+          )}
           <OverallSummaryBar rows={allRows} currency={currency} label={`${label.replace(` (${currency})`, "")} 合計`} variant="total" />
           <PnLChart rows={allRows} currency={currency} />
         </div>
