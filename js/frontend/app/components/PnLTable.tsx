@@ -442,7 +442,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
             <tfoot>
               <tr style={{ fontWeight: 700, fontSize: "0.95rem" }}>
                 {cols.map((c, idx) => {
-                  const ds = divStyle(idx);
+                  const { borderRight: _br, ...ds } = divStyle(idx);
                   if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400, ...ds }}>合計</td>;
                   if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}</td>;
                   if (c.key === "unreal_gain") { const pct = totalCost ? totalUnreal / totalCost * 100 : null; return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}{pct !== null ? ` (${fmtPct(pct)})` : ""}</td>; }
