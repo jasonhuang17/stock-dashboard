@@ -107,6 +107,25 @@ stock-dashboard/
 5. Push 前確認 `user_data.json` 不在 staging（已 gitignored，通常自動排除）
 6. **更改 `user_data.json` 格式時，必須同步新增 migration**（見下方「資料格式版本管理」）
 
+### Commit 前必做 Checklist（每次，無例外）
+
+每一個 commit **之前**，必須依序完成：
+
+```
+[ ] 1. DEV_LOG.md → 在「變更紀錄」區最頂端新增條目，說明這次改了什麼、為什麼
+[ ] 2. README.md  → 如有新增/修改功能，更新功能表格或說明（純 bugfix 可免）
+[ ] 3. 確認沒有把 user_data.json / DEV_LOG.md 加入 staging
+[ ] 4. git commit（英文訊息，無中文、emoji、Co-Authored-By）
+```
+
+**DEV_LOG.md 雖然 gitignored（不進 repo），但每次仍必須在本地更新。**
+這是唯一的完整變更紀錄，略過等於永久遺失紀錄。
+
+過去曾發生的錯誤模式（避免重蹈）：
+- ❌ commit 完才想到要更新文檔，或根本忘記更新
+- ❌ 連續數個 commit 都沒更新，最後一次補齊但細節已失真
+- ❌ 只更新 DEV_LOG 沒更新 README（或反過來）
+
 ---
 
 ## 資料格式版本管理
