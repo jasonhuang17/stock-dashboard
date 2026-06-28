@@ -688,6 +688,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
                     ) : null;
                   })}
                   <OverallSummaryBar rows={rows} currency={currency} label={group.name} variant="group" />
+                  <PnLChart rows={rows} currency={currency} />
                 </div>
               );
             })
