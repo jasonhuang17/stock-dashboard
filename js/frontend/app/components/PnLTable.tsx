@@ -201,7 +201,8 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [dividers, setDividers] = useState<Set<string>>(new Set()); // column IDs after which a divider line is shown
   const [showPicker, setShowPicker] = useState(false);
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
-  const [appliedAll, setAppliedAll] = useState(false);
+  const [appliedAll, setAppliedAll]         = useState(false);
+  const [appliedAllAccts, setAppliedAllAccts] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -368,6 +369,18 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                     {appliedTo === a ? "✓ 已套用" : a}
                   </button>
                 ))}
+                <button className="dash-btn dash-btn-sm" onClick={() => {
+                  const vis = [...optCols]; const order = colOrder; const divs = [...dividers];
+                  _allAccountKeys.filter(a => a !== account).forEach(a => {
+                    api.setSettings({ pnl_cols: { [a]: { vis, order, dividers: divs } } }).catch(() => {});
+                    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target: a, vis, order, dividers: divs } }));
+                  });
+                  setAppliedAllAccts(true);
+                  setTimeout(() => setAppliedAllAccts(false), 1500);
+                }}
+                  style={{ fontSize: "0.65rem", textAlign: "left", marginTop: 2, color: appliedAllAccts ? "var(--teal)" : "rgba(237,209,112,0.8)", borderColor: appliedAllAccts ? "rgba(30,207,214,0.5)" : "rgba(237,209,112,0.3)" }}>
+                  {appliedAllAccts ? "✓ 已套用" : "套用至全部帳戶"}
+                </button>
                 <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginTop: 6, marginBottom: 2 }}>套用至 — 整體損益</div>
                 {_allAccountKeys.filter(a => `overall:${a}` !== account).map(a => (
                   <button key={`overall:${a}`} className="dash-btn dash-btn-sm" onClick={() => applyTo(`overall:${a}`)}
