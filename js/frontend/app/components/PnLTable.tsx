@@ -360,13 +360,24 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
             </DndContext>
             {account && (
               <div style={{ borderTop: "1px solid rgba(8,120,164,0.25)", marginTop: 8, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginBottom: 2 }}>套用至</div>
+                <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginBottom: 2 }}>套用至 — 各帳戶</div>
                 {_allAccountKeys.filter(a => a !== account).map(a => (
                   <button key={a} className="dash-btn dash-btn-sm" onClick={() => applyTo(a)}
                     style={{ fontSize: "0.65rem", textAlign: "left", color: appliedTo === a ? "var(--teal)" : undefined }}>
                     {appliedTo === a ? "✓ 已套用" : a}
                   </button>
                 ))}
+                <div style={{ fontSize: "0.62rem", color: "var(--dim)", letterSpacing: "0.06em", marginTop: 6, marginBottom: 2 }}>套用至 — 整體損益</div>
+                {_allAccountKeys.filter(a => `overall:${a}` !== account).map(a => (
+                  <button key={`overall:${a}`} className="dash-btn dash-btn-sm" onClick={() => applyTo(`overall:${a}`)}
+                    style={{ fontSize: "0.65rem", textAlign: "left", color: appliedTo === `overall:${a}` ? "var(--teal)" : undefined }}>
+                    {appliedTo === `overall:${a}` ? "✓ 已套用" : a}
+                  </button>
+                ))}
+                <button className="dash-btn dash-btn-sm" onClick={() => _allAccountKeys.filter(a => `overall:${a}` !== account).forEach(a => applyTo(`overall:${a}`))}
+                  style={{ fontSize: "0.65rem", textAlign: "left", marginTop: 2, color: "rgba(237,209,112,0.8)", borderColor: "rgba(237,209,112,0.3)" }}>
+                  套用至全部整體損益
+                </button>
               </div>
             )}
           </div>
