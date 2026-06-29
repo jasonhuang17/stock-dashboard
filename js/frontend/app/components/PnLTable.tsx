@@ -207,7 +207,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
   }, []);
 
