@@ -8,6 +8,8 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 
+const REFRESH_INTERVAL = 30_000;
+
 type Period = "intra" | "1d" | "2d" | "3d" | "4d" | "5d" | "1w" | "1m" | "3m" | "ytd" | "1y" | "5y" | "all";
 type Bar = { t: number; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null };
 type SessionBoundary = { open: number; close?: number };
@@ -47,7 +49,10 @@ function fmtDateFull(t: number, interval: string): string {
 export default function StockPage() {
   const params = useParams();
   const ticker = (params?.ticker as string ?? "").toUpperCase();
-  const [period, setPeriod] = useState<Period>("1d");
+  const isTW = /^\d{4,}$/.test(ticker);
+
+  const [period, setPeriod] = useState<Period>("intra");
+  const [periodReady, setPeriodReady] = useState(false);
   const [intraDates, setIntraDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [data, setData] = useState<{
@@ -56,18 +61,36 @@ export default function StockPage() {
     session_boundaries?: SessionBoundary[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Determine default period: PRE/POST → "1d", otherwise → "intra"
+  useEffect(() => {
+    api.marketStatus().then(r => {
+      const mktStatus = isTW ? r.tw.status : r.us.status;
+      if (mktStatus === "PRE/POST") setPeriod("1d");
+    }).catch(() => {}).finally(() => setPeriodReady(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker]);
+
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey(k => k + 1), REFRESH_INTERVAL);
+    return () => clearInterval(id);
+  }, []);
 
   // Fetch the 10 most recent trading days when intra mode is active
   useEffect(() => {
     if (period !== "intra") return;
-    const market = /^\d{4,}$/.test(ticker) ? "TW" : "US";
+    const market = isTW ? "TW" : "US";
     api.tradingDays(10, market).then(r => {
       setIntraDates(r.days);
       setSelectedDate(prev => (r.days.includes(prev) ? prev : r.days[0] ?? ""));
     }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, ticker]);
 
   useEffect(() => {
+    if (!periodReady) return;
     if (period === "intra" && !selectedDate) return;
     let cancelled = false;
     setLoading(true);
@@ -83,7 +106,7 @@ export default function StockPage() {
       .catch(() => { if (!cancelled) setData({ bars: [], interval: "1d" }); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ticker, period, selectedDate]);
+  }, [ticker, period, selectedDate, periodReady, refreshKey]);
 
   const bars = data?.bars ?? [];
   const interval = data?.interval ?? "1d";
@@ -95,7 +118,6 @@ export default function StockPage() {
   const changePct = first ? change / first * 100 : 0;
   const isPos = change >= 0;
   const lineColor = isPos ? "#C05640" : "#3DAA70";
-
 
   const chartData = bars.map(b => ({
     t: b.t, c: b.c,
@@ -121,6 +143,13 @@ export default function StockPage() {
       nonSessionZones.push({ x1: lc, x2: cEnd, label: isSingleDay ? "盤後" : undefined });
   }
 
+  // For intra period, fix x-axis to the full trading session
+  const xDomainStart: number | "dataMin" =
+    period === "intra" && sessionBoundaries.length > 0 ? sessionBoundaries[0].open : "dataMin";
+  const xDomainEnd: number | "dataMax" =
+    period === "intra" && sessionBoundaries.length > 0 && sessionBoundaries[0].close != null
+      ? sessionBoundaries[0].close : "dataMax";
+
   return (
     <div style={{ padding: "1rem 2rem", minHeight: "100vh" }}>
       {/* Header */}
@@ -141,6 +170,18 @@ export default function StockPage() {
             </span>
           </>
         )}
+        <button
+          onClick={() => setRefreshKey(k => k + 1)}
+          disabled={loading}
+          style={{
+            marginLeft: "auto", background: "none", border: "1px solid rgba(8,120,164,0.35)",
+            borderRadius: 4, color: "var(--dim)", cursor: loading ? "default" : "pointer",
+            fontFamily: "Courier New", fontSize: "0.78rem", padding: "4px 10px", opacity: loading ? 0.5 : 1,
+          }}
+          title="重新整理"
+        >
+          {loading ? <span className="spinner" /> : "↺ 重整"}
+        </button>
       </div>
 
       {/* Period selector */}
@@ -191,7 +232,7 @@ export default function StockPage() {
           <ResponsiveContainer width="100%" height={340}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(8,120,164,0.12)" vertical={false} />
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]}
+              <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]}
                 tick={{ fill: "#6899b8", fontSize: 10 }} tickFormatter={t => fmtDate(t, interval)}
                 tickCount={8} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: "#6899b8", fontSize: 10 }}
@@ -251,7 +292,7 @@ export default function StockPage() {
           {bars.some(b => b.v !== null) && (
             <ResponsiveContainer width="100%" height={80}>
               <ComposedChart data={chartData} margin={{ top: 0, right: 16, bottom: 8, left: 8 }}>
-                <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
+                <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]} hide />
                 <YAxis tick={{ fill: "#6899b8", fontSize: 9 }} width={60}
                   tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)} />
                 <Tooltip

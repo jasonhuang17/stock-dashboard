@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Quote, PremarketQuote, Market } from "@/lib/types";
 import { StockCard, PremarketCard } from "./StockCard";
@@ -181,12 +182,14 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
           {displayQuotes.map(q => (
             <div key={q.ticker} style={{ position: "relative" }}>
-              <StockCard q={q} />
+              <Link href={`/stock/${encodeURIComponent(q.ticker)}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+                <StockCard q={q} />
+              </Link>
               {!useMock && (
                 <button
                   className="ticker-chip-remove"
                   style={{ position: "absolute", top: 8, right: 8, fontSize: "1.1rem" }}
-                  onClick={() => handleRemove(q.ticker)}
+                  onClick={e => { e.stopPropagation(); e.preventDefault(); handleRemove(q.ticker); }}
                   title={`移除 ${q.ticker}`}
                 >×</button>
               )}
@@ -201,7 +204,11 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
       {/* Premarket */}
       {subTab === "premarket" && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
-          {tickers.map(t => <PremarketCard key={t} q={pmMap[t] ?? { ticker: t, price: null, pct: null, prev_close: null, time: null }} />)}
+          {tickers.map(t => (
+            <Link key={t} href={`/stock/${encodeURIComponent(t)}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+              <PremarketCard q={pmMap[t] ?? { ticker: t, price: null, pct: null, prev_close: null, time: null }} />
+            </Link>
+          ))}
         </div>
       )}
 
