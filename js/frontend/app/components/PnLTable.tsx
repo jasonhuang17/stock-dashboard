@@ -495,8 +495,8 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                             {(() => {
                               if (!row.fetched_at) return "快取";
                               const mins = Math.floor((now / 1000 - row.fetched_at) / 60);
-                              if (mins < 1) return "< 1分前";
-                              if (mins < 60) return `${mins}分前`;
+                              if (mins < 1) return "< 1分鐘前";
+                              if (mins < 60) return `${mins}分鐘前`;
                               return `${Math.floor(mins / 60)}小時前`;
                             })()}
                           </div>
