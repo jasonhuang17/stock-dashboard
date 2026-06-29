@@ -1150,6 +1150,14 @@ def create_account(body: AccountBody):
         raise HTTPException(409, "account already exists")
     portfolio[name] = {"currency": currency, "positions": {}}
     save_config(groups, portfolio, pinned, markets)
+    s = load_settings()
+    default_cols = s.get("pnl_cols", {}).get("__default__")
+    if default_cols:
+        existing_pnl = s.get("pnl_cols", {})
+        existing_pnl[name] = default_cols
+        existing_pnl[f"overall:{name}"] = default_cols
+        s["pnl_cols"] = existing_pnl
+        save_settings(s)
     return {"accounts": list(portfolio.keys()), "account": name, "currency": currency}
 
 

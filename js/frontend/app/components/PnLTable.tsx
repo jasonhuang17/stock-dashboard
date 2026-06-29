@@ -206,10 +206,12 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   useEffect(() => {
     api.getSettings().then(s => {
       const acct = s.pnl_cols?.[account] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined;
-      if (acct) {
-        if (acct.vis)      setOptCols(new Set(acct.vis));
-        if (acct.order)    setColOrder(mergeOrder(acct.order));
-        if (acct.dividers) setDividers(new Set(acct.dividers));
+      const dflt = account ? s.pnl_cols?.["__default__"] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined : undefined;
+      const src = acct ?? dflt;
+      if (src) {
+        if (src.vis)      setOptCols(new Set(src.vis));
+        if (src.order)    setColOrder(mergeOrder(src.order));
+        if (src.dividers) setDividers(new Set(src.dividers));
       } else if (s.col_vis || s.col_order) {
         // migrate from old flat format
         if (s.col_vis)   setOptCols(new Set(s.col_vis));
