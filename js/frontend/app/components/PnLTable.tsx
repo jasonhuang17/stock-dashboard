@@ -25,6 +25,9 @@ let _allAccountKeys: string[] = ["美股複委託（台幣帳戶）", "美股複
 export function setAllAccountKeys(keys: string[]) { _allAccountKeys = keys; }
 const SYNC_EVENT = "pnl-cols-sync";
 
+// Module-level cache: persists across mounts so account-switch and remount have zero flash
+const _colsCache = new Map<string, { vis: string[]; order: string[]; dividers: string[] }>();
+
 // Only ticker is always shown; everything else is optional
 
 type OptColId =
@@ -196,14 +199,22 @@ function SortableColRow({ id, label, checked, onToggle, hasDivider, onToggleDivi
 
 export function PnLTable({ rows, currency, account = "", label }: { rows: PortfolioRow[]; currency: Currency; account?: string; label?: string }) {
   const [ss, setSS]           = useState<SortState>({ col: null, dir: "desc" });
-  const [optCols, setOptCols] = useState<Set<string>>(defaultOptCols());
-  const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
-  const [dividers, setDividers] = useState<Set<string>>(new Set()); // column IDs after which a divider line is shown
+  const [optCols, setOptCols] = useState<Set<string>>(() => {
+    const c = _colsCache.get(account);
+    return c ? new Set(c.vis) : defaultOptCols();
+  });
+  const [colOrder, setColOrder] = useState<OptColId[]>(() => {
+    const c = _colsCache.get(account);
+    return c ? mergeOrder(c.order) : ([...DEFAULT_ORDER] as OptColId[]);
+  });
+  const [dividers, setDividers] = useState<Set<string>>(() => {
+    const c = _colsCache.get(account);
+    return c ? new Set(c.dividers) : new Set();
+  });
   const [showPicker, setShowPicker] = useState(false);
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
   const [appliedAll, setAppliedAll]         = useState(false);
   const [appliedAllAccts, setAppliedAllAccts] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -213,21 +224,24 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   }, []);
 
   useEffect(() => {
-    setSettingsLoaded(false);
     api.getSettings().then(s => {
       const acct = s.pnl_cols?.[account] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined;
       const dflt = account ? s.pnl_cols?.["__default__"] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined : undefined;
       const src = acct ?? dflt;
       if (src) {
+        const vis = src.vis ?? [];
+        const order = src.order ? mergeOrder(src.order) : ([...DEFAULT_ORDER] as OptColId[]);
+        const divs = src.dividers ?? [];
+        _colsCache.set(account, { vis, order, dividers: divs });
         if (src.vis)      setOptCols(new Set(src.vis));
-        if (src.order)    setColOrder(mergeOrder(src.order));
+        if (src.order)    setColOrder(order);
         if (src.dividers) setDividers(new Set(src.dividers));
       } else if (s.col_vis || s.col_order) {
         // migrate from old flat format
         if (s.col_vis)   setOptCols(new Set(s.col_vis));
         if (s.col_order) setColOrder(mergeOrder(s.col_order));
       }
-    }).catch(() => {}).finally(() => setSettingsLoaded(true));
+    }).catch(() => {});
 
     function onSync(e: Event) {
       const { target, vis, order, dividers: divs } = (e as CustomEvent<{ target: string; vis: string[]; order: string[]; dividers?: string[] }>).detail;
@@ -436,7 +450,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
         )}
       </div>
 
-      {!settingsLoaded ? null : <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto" }}>
         <table className="pnl-table">
           <thead>
             <tr>
@@ -532,7 +546,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
             </tfoot>
           )}
         </table>
-      </div>}
+      </div>
     </div>
   );
 }
