@@ -715,6 +715,7 @@ def _portfolio_rows(account: str) -> list[dict]:
             "week_high": q.get("week_high"), "week_low": q.get("week_low"),
             "ytd_gain": ytd_gain, "ytd_pct": ytd_pct,
             "fetched_at": q.get("fetched_at"),
+            "is_stale": price is not None and resolved_key not in live_cached,
         })
 
     _log_portfolio(

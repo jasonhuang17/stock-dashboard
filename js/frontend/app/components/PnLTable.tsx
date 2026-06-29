@@ -450,7 +450,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.ticker}>
+              <tr key={row.ticker} style={row.is_stale ? { opacity: 0.45 } : undefined}>
                 {cols.map((c, idx) => {
                   const val = row[c.key] as number | null;
                   const needsColor = ["per_share", "pct", "today_gain", "unreal_gain", "ytd_gain", "ytd_pct"].includes(c.key);
@@ -488,6 +488,10 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                             {(() => { const p = (row.day_low - row.prev_close) / row.prev_close * 100; return `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`; })()}
                           </div>
                         </div>
+                      ) : c.key === "price" && row.is_stale ? (
+                        <span title="資料來自快取，非即時報價" style={{ cursor: "help" }}>
+                          {c.fmt(row)}<span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: 2 }}>●</span>
+                        </span>
                       ) : c.fmt(row)}
                     </td>
                   );

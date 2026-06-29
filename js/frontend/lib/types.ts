@@ -31,6 +31,7 @@ export interface PortfolioRow {
   ytd_gain: number | null;
   ytd_pct: number | null;
   fetched_at?: number;
+  is_stale?: boolean;
 }
 
 export interface PremarketPortfolioRow {
