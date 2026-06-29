@@ -203,7 +203,13 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
   const [appliedAll, setAppliedAll]         = useState(false);
   const [appliedAllAccts, setAppliedAllAccts] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     api.getSettings().then(s => {
@@ -305,6 +311,14 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const hasData     = rows.some(r => r.price !== null);
   const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis", "market_value"].includes(c.key));
 
+  const oldestFetch = rows
+    .filter(r => r.price !== null && r.fetched_at != null)
+    .reduce<number | null>((min, r) => min === null ? r.fetched_at! : Math.min(min, r.fetched_at!), null);
+  const staleMinutes = oldestFetch != null ? Math.floor((now / 1000 - oldestFetch) / 60) : null;
+  const staleLabel = staleMinutes != null && staleMinutes >= 2
+    ? staleMinutes < 60 ? `${staleMinutes} 分鐘前` : `${Math.floor(staleMinutes / 60)} 小時前`
+    : null;
+
   // Divider line: borderRight on the divider column with extra paddingRight so the line sits
   // closer to the right column (more space on the left side of the line).
   const divStyle = (idx: number): React.CSSProperties => {
@@ -325,7 +339,14 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, position: "relative" }} ref={pickerRef}>
-        {label ? <span style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em" }}>{label}</span> : <span />}
+        {label ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: "0.7rem", color: "var(--dim)", letterSpacing: "0.08em" }}>{label}</span>
+            {staleLabel && (
+              <span style={{ fontSize: "0.62rem", color: "var(--dim)", opacity: 0.6 }}>· 行情 {staleLabel}</span>
+            )}
+          </span>
+        ) : <span />}
         <button className="dash-btn dash-btn-sm" onClick={() => setShowPicker(s => !s)} style={{ fontSize: "0.7rem" }}>
           ⊞ 欄位
         </button>

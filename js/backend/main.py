@@ -471,6 +471,7 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
                     row["week_high"] = w.get("week_high")
                     row["week_low"]  = w.get("week_low")
                 if row.get("price") is not None:
+                    row["fetched_at"] = datetime.now().timestamp()
                     with _cache_lock:
                         _quotes_cache[t] = row
                         _quotes_stale[t] = row
@@ -713,6 +714,7 @@ def _portfolio_rows(account: str) -> list[dict]:
             "day_high": q.get("day_high"), "day_low": q.get("day_low"), "volume": q.get("volume"),
             "week_high": q.get("week_high"), "week_low": q.get("week_low"),
             "ytd_gain": ytd_gain, "ytd_pct": ytd_pct,
+            "fetched_at": q.get("fetched_at"),
         })
 
     _log_portfolio(

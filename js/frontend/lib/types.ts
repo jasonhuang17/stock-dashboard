@@ -30,6 +30,7 @@ export interface PortfolioRow {
   week_low: number | null;
   ytd_gain: number | null;
   ytd_pct: number | null;
+  fetched_at?: number;
 }
 
 export interface PremarketPortfolioRow {
