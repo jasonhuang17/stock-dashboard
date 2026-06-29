@@ -489,9 +489,18 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                           </div>
                         </div>
                       ) : c.key === "price" && row.is_stale ? (
-                        <span title="資料來自快取，非即時報價" style={{ cursor: "help" }}>
-                          {c.fmt(row)}<span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: 2 }}>●</span>
-                        </span>
+                        <div title="資料來自快取，非即時報價" style={{ cursor: "help" }}>
+                          <div>{c.fmt(row)}</div>
+                          <div style={{ fontSize: "0.65rem", color: "var(--dim)", opacity: 0.7 }}>
+                            {(() => {
+                              if (!row.fetched_at) return "快取";
+                              const mins = Math.floor((now / 1000 - row.fetched_at) / 60);
+                              if (mins < 1) return "< 1分前";
+                              if (mins < 60) return `${mins}分前`;
+                              return `${Math.floor(mins / 60)}小時前`;
+                            })()}
+                          </div>
+                        </div>
                       ) : c.fmt(row)}
                     </td>
                   );
