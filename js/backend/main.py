@@ -537,10 +537,21 @@ def _single_ticker_premarket(ticker: str) -> dict:
         daily = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False)
         if not daily.empty:
             closes = daily["Close"].dropna()
-            if len(closes) >= 2:
-                base["prev_close"] = float(closes.iloc[-2])
-            elif len(closes) == 1:
-                base["prev_close"] = float(closes.iloc[-1])
+            if len(closes) >= 1:
+                # Determine whether today's regular session has already completed.
+                # yfinance daily index is timezone-aware; compare date in ET.
+                try:
+                    last_idx = daily.index[-1]
+                    last_date = last_idx.tz_convert(et).date() if hasattr(last_idx, "tz_convert") else last_idx.date()
+                except Exception:
+                    last_date = None
+                today_et = datetime.now(et).date()
+                if last_date == today_et and len(closes) >= 2:
+                    # Regular session completed today: second-to-last bar = yesterday's close
+                    base["prev_close"] = float(closes.iloc[-2])
+                else:
+                    # Pre-market or weekend: last bar IS yesterday's (most recent) close
+                    base["prev_close"] = float(closes.iloc[-1])
 
         intraday = yf.Ticker(ticker).history(period="1d", interval="1m",
                                               prepost=True, auto_adjust=False)
