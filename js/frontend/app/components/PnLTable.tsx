@@ -200,7 +200,8 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [colOrder, setColOrder] = useState<OptColId[]>([...DEFAULT_ORDER] as OptColId[]);
   const [dividers, setDividers] = useState<Set<string>>(new Set()); // column IDs after which a divider line is shown
   const [showPicker, setShowPicker] = useState(false);
-  const [appliedTo, setAppliedTo] = useState<string | null>(null);
+  const [appliedTo, setAppliedTo]   = useState<string | null>(null);
+  const [appliedAll, setAppliedAll] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -374,9 +375,18 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                     {appliedTo === `overall:${a}` ? "✓ 已套用" : a}
                   </button>
                 ))}
-                <button className="dash-btn dash-btn-sm" onClick={() => _allAccountKeys.filter(a => `overall:${a}` !== account).forEach(a => applyTo(`overall:${a}`))}
-                  style={{ fontSize: "0.65rem", textAlign: "left", marginTop: 2, color: "rgba(237,209,112,0.8)", borderColor: "rgba(237,209,112,0.3)" }}>
-                  套用至全部整體損益
+                <button className="dash-btn dash-btn-sm" onClick={() => {
+                  const vis = [...optCols]; const order = colOrder; const divs = [...dividers];
+                  _allAccountKeys.filter(a => `overall:${a}` !== account).forEach(a => {
+                    const key = `overall:${a}`;
+                    api.setSettings({ pnl_cols: { [key]: { vis, order, dividers: divs } } }).catch(() => {});
+                    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target: key, vis, order, dividers: divs } }));
+                  });
+                  setAppliedAll(true);
+                  setTimeout(() => setAppliedAll(false), 1500);
+                }}
+                  style={{ fontSize: "0.65rem", textAlign: "left", marginTop: 2, color: appliedAll ? "var(--teal)" : "rgba(237,209,112,0.8)", borderColor: appliedAll ? "rgba(30,207,214,0.5)" : "rgba(237,209,112,0.3)" }}>
+                  {appliedAll ? "✓ 已套用" : "套用至全部整體損益"}
                 </button>
               </div>
             )}
