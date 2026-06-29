@@ -394,10 +394,12 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                 ))}
                 <button className="dash-btn dash-btn-sm" onClick={() => {
                   const vis = [...optCols]; const order = colOrder; const divs = [...dividers];
+                  const patch: Record<string, { vis: string[]; order: string[]; dividers: string[] }> = {};
                   _allAccountKeys.filter(a => a !== account).forEach(a => {
-                    api.setSettings({ pnl_cols: { [a]: { vis, order, dividers: divs } } }).catch(() => {});
+                    patch[a] = { vis, order, dividers: divs };
                     window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target: a, vis, order, dividers: divs } }));
                   });
+                  api.setSettings({ pnl_cols: patch }).catch(() => {});
                   setAppliedAllAccts(true);
                   setTimeout(() => setAppliedAllAccts(false), 1500);
                 }}
@@ -413,11 +415,13 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                 ))}
                 <button className="dash-btn dash-btn-sm" onClick={() => {
                   const vis = [...optCols]; const order = colOrder; const divs = [...dividers];
+                  const patch: Record<string, { vis: string[]; order: string[]; dividers: string[] }> = {};
                   _allAccountKeys.filter(a => `overall:${a}` !== account).forEach(a => {
                     const key = `overall:${a}`;
-                    api.setSettings({ pnl_cols: { [key]: { vis, order, dividers: divs } } }).catch(() => {});
+                    patch[key] = { vis, order, dividers: divs };
                     window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { target: key, vis, order, dividers: divs } }));
                   });
+                  api.setSettings({ pnl_cols: patch }).catch(() => {});
                   setAppliedAll(true);
                   setTimeout(() => setAppliedAll(false), 1500);
                 }}
