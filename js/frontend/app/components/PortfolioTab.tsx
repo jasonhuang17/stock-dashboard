@@ -625,7 +625,10 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   }
 
   function toggleLock(idx: number) {
-    markDirty(draftGroups.map((g, i) => i === idx ? { ...g, locked: !g.locked } : g));
+    const updated = draftGroups.map((g, i) => i === idx ? { ...g, locked: !g.locked } : g);
+    setDraftGroups(updated);
+    setSavedGroups(updated);
+    api.setSettings({ account_groups: updated }).catch(() => {});
   }
 
   const groupSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
