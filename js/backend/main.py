@@ -51,6 +51,45 @@ _EMPTY_PORTFOLIO = {
 
 _config_lock = threading.Lock()
 
+_SETTINGS_LOG = os.path.join(os.path.dirname(__file__), "user_data_log.jsonl")
+
+def _log_settings_change(before: dict, after: dict) -> None:
+    """Append a diff entry to user_data_log.jsonl whenever settings change."""
+    def _pnl_summary(s: dict) -> dict:
+        pc = s.get("pnl_cols", {})
+        return {k: {"vis": v.get("vis", []), "dividers": v.get("dividers", [])} for k, v in pc.items()}
+
+    before_pnl = _pnl_summary(before)
+    after_pnl  = _pnl_summary(after)
+    before_grp = before.get("account_groups", [])
+    after_grp  = after.get("account_groups", [])
+
+    added   = [k for k in after_pnl  if k not in before_pnl]
+    removed = [k for k in before_pnl if k not in after_pnl]
+    changed = [k for k in after_pnl  if k in before_pnl and after_pnl[k] != before_pnl[k]]
+
+    if not added and not removed and not changed and before_grp == after_grp:
+        return  # nothing meaningful changed
+
+    entry = {
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "pnl_cols": {
+            "before_keys": sorted(before_pnl.keys()),
+            "after_keys":  sorted(after_pnl.keys()),
+            "added":   added,
+            "removed": removed,
+            "changed": changed,
+        },
+    }
+    if before_grp != after_grp:
+        entry["account_groups"] = {"before": before_grp, "after": after_grp}
+
+    try:
+        with open(_SETTINGS_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 # ── Schema migrations ─────────────────────────────────────────────────────────
 # Bump SCHEMA_VERSION and add _migrate_vN whenever user_data.json format changes.
@@ -799,6 +838,7 @@ def get_settings():
 @app.put("/api/settings")
 def put_settings(body: SettingsBody):
     s = load_settings()
+    s_before = json.loads(json.dumps(s))
     if body.use_mock is not None:
         s["use_mock"] = body.use_mock
     if body.col_vis is not None:
@@ -834,6 +874,7 @@ def put_settings(body: SettingsBody):
                     entry["locked"] = True
                 groups.append(entry)
         s["account_groups"] = groups
+    _log_settings_change(s_before, s)
     save_settings(s)
     return s
 

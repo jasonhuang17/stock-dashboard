@@ -5,5 +5,6 @@ __pycache__/
 .DS_Store
 js/backend/quote_log.jsonl
 js/backend/portfolio_log.jsonl
+js/backend/user_data_log.jsonl
 DEV_LOG.md
 docs/
