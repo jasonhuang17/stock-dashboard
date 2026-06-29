@@ -41,20 +41,20 @@ type OptColId =
 const OPT_COLS: { id: OptColId; label: string; defaultOn: boolean }[] = [
   { id: "shares",      label: "股數",        defaultOn: true  },
   { id: "avg_cost",    label: "單股成本",     defaultOn: true  },
-  { id: "cost_basis",     label: "總成本",       defaultOn: false },
-  { id: "price",          label: "現價",        defaultOn: true  },
-  { id: "market_value",   label: "市值",        defaultOn: false },
-  { id: "day_high",    label: "每日最高",     defaultOn: false },
-  { id: "day_low",     label: "每日最低",     defaultOn: false },
+  { id: "cost_basis",  label: "總成本",       defaultOn: true  },
+  { id: "price",       label: "現價",         defaultOn: true  },
+  { id: "day_low",     label: "每日最低",     defaultOn: true  },
+  { id: "market_value",label: "市值",         defaultOn: true  },
+  { id: "day_high",    label: "每日最高",     defaultOn: true  },
   { id: "volume",      label: "成交量",       defaultOn: false },
   { id: "week_high",   label: "52W 最高",    defaultOn: false },
   { id: "week_low",    label: "52W 最低",    defaultOn: false },
+  { id: "ytd_gain",    label: "YTD 漲幅",    defaultOn: false },
+  { id: "ytd_pct",     label: "YTD 漲幅%",  defaultOn: false },
   { id: "per_share",   label: "單股漲跌",     defaultOn: true  },
   { id: "pct",         label: "單股漲跌%",    defaultOn: true  },
   { id: "today_gain",  label: "今日損益",     defaultOn: true  },
   { id: "unreal_gain", label: "未實現損益",   defaultOn: true  },
-  { id: "ytd_gain",    label: "YTD 漲幅",    defaultOn: false },
-  { id: "ytd_pct",     label: "YTD 漲幅%",  defaultOn: false },
 ];
 
 const DEFAULT_ORDER = OPT_COLS.map(c => c.id);
@@ -209,7 +209,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   });
   const [dividers, setDividers] = useState<Set<string>>(() => {
     const c = _colsCache.get(account);
-    return c ? new Set(c.dividers) : new Set();
+    return c ? new Set(c.dividers) : new Set(["ticker", "avg_cost", "price", "day_high", "pct", "today_gain"]);
   });
   const [showPicker, setShowPicker] = useState(false);
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
