@@ -1359,8 +1359,24 @@ def get_history(ticker: str, period: str = "1y", date: Optional[str] = None):
 
         result = {"ticker": ticker, "period": period, "interval": interval, "bars": bars}
 
-        # ── Session boundaries (pre/post periods only) ────────────────────────
-        if period in ("1d", "2d", "3d", "4d", "5d"):
+        # ── Session boundaries ────────────────────────────────────────────────
+        if period == "intra" and date:
+            is_tw = fetch_ticker.endswith((".TW", ".TWO"))
+            if is_tw:
+                tz = pytz.timezone("Asia/Taipei")
+                dt_local = datetime.strptime(date, "%Y-%m-%d")
+                open_ts  = tz.localize(dt_local.replace(hour=9,  minute=0))
+                close_ts = tz.localize(dt_local.replace(hour=13, minute=30))
+            else:
+                tz = pytz.timezone("America/New_York")
+                dt_local = datetime.strptime(date, "%Y-%m-%d")
+                open_ts  = tz.localize(dt_local.replace(hour=9,  minute=30))
+                close_ts = tz.localize(dt_local.replace(hour=16, minute=0))
+            result["session_boundaries"] = [{
+                "open":  int(open_ts.timestamp()  * 1000),
+                "close": int(close_ts.timestamp() * 1000),
+            }]
+        elif period in ("1d", "2d", "3d", "4d", "5d"):
             et_tz = pytz.timezone("America/New_York")
             boundaries = []
             cur_day = None
