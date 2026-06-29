@@ -203,6 +203,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
   const [appliedAll, setAppliedAll]         = useState(false);
   const [appliedAllAccts, setAppliedAllAccts] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -212,6 +213,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   }, []);
 
   useEffect(() => {
+    setSettingsLoaded(false);
     api.getSettings().then(s => {
       const acct = s.pnl_cols?.[account] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined;
       const dflt = account ? s.pnl_cols?.["__default__"] as { vis?: string[]; order?: string[]; dividers?: string[] } | undefined : undefined;
@@ -225,7 +227,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
         if (s.col_vis)   setOptCols(new Set(s.col_vis));
         if (s.col_order) setColOrder(mergeOrder(s.col_order));
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setSettingsLoaded(true));
 
     function onSync(e: Event) {
       const { target, vis, order, dividers: divs } = (e as CustomEvent<{ target: string; vis: string[]; order: string[]; dividers?: string[] }>).detail;
@@ -434,7 +436,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
         )}
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      {!settingsLoaded ? null : <div style={{ overflowX: "auto" }}>
         <table className="pnl-table">
           <thead>
             <tr>
@@ -530,7 +532,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
             </tfoot>
           )}
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
