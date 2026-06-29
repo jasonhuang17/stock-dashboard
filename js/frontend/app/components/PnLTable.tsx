@@ -304,10 +304,12 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     });
   }
 
-  const totalToday  = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
-  const totalUnreal = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
-  const totalCost   = rows.reduce((s, r) => s + r.cost_basis, 0);
-  const totalMV     = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+  const totalToday   = rows.reduce((s, r) => s + (r.today_gain  ?? 0), 0);
+  const totalUnreal  = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
+  const totalCost    = rows.reduce((s, r) => s + r.cost_basis, 0);
+  const totalMV      = rows.reduce((s, r) => s + (r.price !== null ? r.price * r.shares : 0), 0);
+  const totalPrevMV  = rows.reduce((s, r) => s + (r.prev_close !== null ? r.prev_close * r.shares : 0), 0);
+  const todayPct     = totalPrevMV > 0 ? totalToday / totalPrevMV * 100 : null;
   const hasData     = rows.some(r => r.price !== null);
   const showTfoot   = hasData && cols.some(c => ["today_gain", "unreal_gain", "cost_basis", "market_value"].includes(c.key));
 
@@ -514,7 +516,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                 {cols.map((c, idx) => {
                   const { borderRight: _br, ...ds } = divStyle(idx);
                   if (c.key === "ticker")      return <td key="ticker" style={{ color: "var(--dim)", fontSize: "0.72rem", letterSpacing: "0.08em", fontWeight: 400, ...ds }}>合計</td>;
-                  if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}</td>;
+                  if (c.key === "today_gain")  return <td key="today_gain"  className={colorOf(totalToday)} style={ds}>{fmtMoney(totalToday, currency)}{todayPct !== null ? ` (${fmtPct(todayPct)})` : ""}</td>;
                   if (c.key === "unreal_gain") { const pct = totalCost ? totalUnreal / totalCost * 100 : null; return <td key="unreal_gain" className={colorOf(totalUnreal)} style={ds}>{fmtMoney(totalUnreal, currency)}{pct !== null ? ` (${fmtPct(pct)})` : ""}</td>; }
                   if (c.key === "cost_basis")    return <td key="cost_basis"    style={{ color: "var(--gold)", ...ds }}>{fmtMoney(totalCost, currency)}</td>;
                   if ((c.key as string) === "market_value") return <td key="market_value"  style={{ color: "var(--text)", ...ds }}>{fmtMoney(totalMV, currency)}</td>;
