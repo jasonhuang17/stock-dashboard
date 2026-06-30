@@ -5,6 +5,7 @@ Run: cd app/backend && uvicorn main:app --reload --port 8000
 import concurrent.futures
 import json
 import os
+import sqlite3
 import threading
 import time
 import urllib.parse
@@ -427,9 +428,16 @@ def _fetch_52w_batch(tickers: list) -> None:
         return
     try:
         dl_arg = tickers[0] if len(tickers) == 1 else tickers
-        with _yf_semaphore:
-            df = yf.download(dl_arg, period="1y", interval="1d", progress=False, auto_adjust=False)
-        if df.empty:
+        df = None
+        for attempt in range(2):
+            try:
+                with _yf_semaphore:
+                    df = yf.download(dl_arg, period="1y", interval="1d", progress=False, auto_adjust=False)
+                break
+            except sqlite3.OperationalError:
+                if attempt == 0:
+                    time.sleep(0.5)
+        if df is None or df.empty:
             return
         is_multi = hasattr(df.columns, "levels")
         for t in tickers:
@@ -463,18 +471,22 @@ def _fetch_ytd_batch(tickers: list) -> dict:
     if not miss:
         return result
     year = datetime.now().year
-    for kwargs in (
-        {"start": f"{year}-01-01", "end": f"{year}-01-20"},  # most stocks
-        {"period": "ytd"},                                     # newly listed tickers
-    ):
-        remaining = [t for t in miss if t not in result]
-        if not remaining:
-            break
+    # Pass 1: batch download Jan 1-20 (covers most stocks)
+    remaining = [t for t in miss if t not in result]
+    if remaining:
         try:
             dl_arg = remaining[0] if len(remaining) == 1 else remaining
-            with _yf_semaphore:
-                df = yf.download(dl_arg, progress=False, auto_adjust=False, **kwargs)
-            if not df.empty:
+            df = None
+            for attempt in range(2):
+                try:
+                    with _yf_semaphore:
+                        df = yf.download(dl_arg, start=f"{year}-01-01", end=f"{year}-01-20",
+                                         progress=False, auto_adjust=False)
+                    break
+                except sqlite3.OperationalError:
+                    if attempt == 0:
+                        time.sleep(0.5)
+            if df is not None and not df.empty:
                 is_multi = hasattr(df.columns, "levels")
                 for t in remaining:
                     try:
@@ -486,6 +498,22 @@ def _fetch_ytd_batch(tickers: list) -> dict:
                                 _ytd_cache[t] = val
                     except Exception:
                         pass
+        except Exception:
+            pass
+
+    # Pass 2: per-ticker ytd fetch for anything still missing (newly listed or special tickers).
+    # Done individually so one bad ticker (e.g. delisted warrants) cannot fail the whole batch.
+    for t in [t for t in miss if t not in result]:
+        try:
+            with _yf_semaphore:
+                df = yf.download(t, period="ytd", interval="1d", progress=False, auto_adjust=False)
+            if df is not None and not df.empty:
+                series = df["Close"].dropna()
+                if len(series):
+                    val = float(series.iloc[0])
+                    result[t] = val
+                    with _cache_lock:
+                        _ytd_cache[t] = val
         except Exception:
             pass
     for t in miss:
@@ -520,8 +548,17 @@ def _fetch_quotes(tickers: tuple) -> list[dict]:
                             "week_high": None, "week_low": None}
         try:
             dl_arg = miss[0] if len(miss) == 1 else miss
-            with _yf_semaphore:
-                df = yf.download(dl_arg, period="5d", interval="1d", progress=False, auto_adjust=False)
+            df = None
+            for attempt in range(2):
+                try:
+                    with _yf_semaphore:
+                        df = yf.download(dl_arg, period="5d", interval="1d", progress=False, auto_adjust=False)
+                    break
+                except sqlite3.OperationalError:
+                    if attempt == 0:
+                        time.sleep(0.5)
+            if df is None:
+                raise RuntimeError("yf.download failed after retry")
             is_multi = (not df.empty) and hasattr(df.columns, "levels")
             for t in miss:
                 row = _empty(t)
