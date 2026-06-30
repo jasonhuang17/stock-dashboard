@@ -49,7 +49,7 @@ function fmtDateFull(t: number, interval: string): string {
 export default function StockPage() {
   const params = useParams();
   const ticker = (params?.ticker as string ?? "").toUpperCase();
-  const isTW = /^\d{4,}$/.test(ticker);
+  const isTW = /^\d{4,}[A-Za-z]?$/.test(ticker);
 
   const [period, setPeriod] = useState<Period>("intra");
   const [periodReady, setPeriodReady] = useState(false);
