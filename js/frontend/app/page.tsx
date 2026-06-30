@@ -291,92 +291,90 @@ export default function Dashboard() {
       <hr className="dash-hr" style={{ marginBottom: 12 }} />
 
       {/* Main tabs */}
-      <div className="tab-bar" style={{ alignItems: "center" }}>
+      <div className="tab-bar main-tab-bar">
         {/* 持倉 tab */}
-        <button className={`tab-btn${tab === 0 ? " active" : ""}`} onClick={() => handleSetTab(0)}>
+        <button className={`tab-btn main-tab-fixed${tab === 0 ? " active" : ""}`} onClick={() => handleSetTab(0)}>
           💼 持倉
         </button>
 
-        {/* Divider between 持倉 and watchlist groups */}
-        {groupNames.length > 0 && (
-          <span style={{ width: 1, height: 18, background: "rgba(8,120,164,0.35)", margin: "0 4px", flexShrink: 0 }} />
-        )}
+        <div className="main-tab-scroll">
+          {/* Divider between 持倉 and watchlist groups */}
+          {groupNames.length > 0 && <span className="main-tab-divider" />}
 
-        {/* Group tabs — dnd-kit sortable */}
-        <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
-          const { active, over } = event;
-          if (!useMock && over && active.id !== over.id) {
-            const oldIdx = groupNames.indexOf(active.id as string);
-            const newIdx = groupNames.indexOf(over.id as string);
-            handleReorderGroups(arrayMove(groupNames, oldIdx, newIdx));
-          }
-        }}>
-          <SortableContext items={groupNames} strategy={horizontalListSortingStrategy}>
-            <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 0 }}>
-              {groupNames.map((g, i) => {
-                const tabIdx = i + 1;
-                return (
-                  <SortableGroupTab key={g} id={g}
-                    isActive={tab === tabIdx}
-                    isPinned={pinned.includes(g)}
-                    isRenaming={renamingGroup === g}
-                    useMock={useMock}
-                    renameValue={renameValue}
-                    market={markets[g] ?? "US"}
-                    onActivate={() => handleSetTab(tabIdx)}
-                    onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
-                    onDelete={() => handleDeleteGroup(g)}
-                    onRenameChange={v => setRenameValue(v)}
-                    onRenameBlur={() => { if (renameEscRef.current) { renameEscRef.current = false; return; } handleRenameGroup(); }}
-                    onRenameKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); } }}
-                  />
-                );
-              })}
+          {/* Group tabs — dnd-kit sortable */}
+          <DndContext sensors={groupSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
+            const { active, over } = event;
+            if (!useMock && over && active.id !== over.id) {
+              const oldIdx = groupNames.indexOf(active.id as string);
+              const newIdx = groupNames.indexOf(over.id as string);
+              handleReorderGroups(arrayMove(groupNames, oldIdx, newIdx));
+            }
+          }}>
+            <SortableContext items={groupNames} strategy={horizontalListSortingStrategy}>
+              <div className="main-group-tabs">
+                {groupNames.map((g, i) => {
+                  const tabIdx = i + 1;
+                  return (
+                    <SortableGroupTab key={g} id={g}
+                      isActive={tab === tabIdx}
+                      isPinned={pinned.includes(g)}
+                      isRenaming={renamingGroup === g}
+                      useMock={useMock}
+                      renameValue={renameValue}
+                      market={markets[g] ?? "US"}
+                      onActivate={() => handleSetTab(tabIdx)}
+                      onDoubleClick={() => { if (!useMock) { setRenamingGroup(g); setRenameValue(g); } }}
+                      onDelete={() => handleDeleteGroup(g)}
+                      onRenameChange={v => setRenameValue(v)}
+                      onRenameBlur={() => { if (renameEscRef.current) { renameEscRef.current = false; return; } handleRenameGroup(); }}
+                      onRenameKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { renameEscRef.current = true; setRenamingGroup(null); } }}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+
+          {/* Add group */}
+          {!addingGroup ? (
+            <button className="tab-btn" onClick={() => { if (!useMock) setAddingGroup(true); }}
+              disabled={useMock}
+              title={useMock ? "exit demo to edit" : undefined}
+              style={{ padding: "4px 10px", fontSize: "0.88rem", color: useMock ? "var(--dim)" : "var(--teal)", lineHeight: 1, cursor: useMock ? "not-allowed" : "pointer" }}>+</button>
+          ) : (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <input
+                autoFocus
+                value={newGroupName}
+                onChange={e => setNewGroupName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleCreateGroup(); if (e.key === "Escape") { setAddingGroup(false); setNewGroupName(""); setNewGroupMarket("US"); } }}
+                placeholder="group name"
+                style={{ fontFamily: "Courier New", fontSize: "0.78rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 8px", width: 110, outline: "none" }}
+              />
+              <select
+                value={newGroupMarket}
+                onChange={e => setNewGroupMarket(e.target.value as Market)}
+                style={{ fontFamily: "Courier New", fontSize: "0.72rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 6px", outline: "none", cursor: "pointer" }}
+              >
+                <option value="US">🇺🇸 US</option>
+                <option value="TW">🇹🇼 TW</option>
+              </select>
+              <button className="dash-btn dash-btn-sm" onClick={handleCreateGroup}>add</button>
+              <button className="dash-btn dash-btn-sm" onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupMarket("US"); }}>cancel</button>
             </div>
-          </SortableContext>
-        </DndContext>
+          )}
 
-        {/* Add group */}
-        {!addingGroup ? (
-          <button className="tab-btn" onClick={() => { if (!useMock) setAddingGroup(true); }}
-            disabled={useMock}
-            title={useMock ? "exit demo to edit" : undefined}
-            style={{ padding: "4px 10px", fontSize: "0.88rem", color: useMock ? "var(--dim)" : "var(--teal)", lineHeight: 1, cursor: useMock ? "not-allowed" : "pointer" }}>+</button>
-        ) : (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <input
-              autoFocus
-              value={newGroupName}
-              onChange={e => setNewGroupName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleCreateGroup(); if (e.key === "Escape") { setAddingGroup(false); setNewGroupName(""); setNewGroupMarket("US"); } }}
-              placeholder="group name"
-              style={{ fontFamily: "Courier New", fontSize: "0.78rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 8px", width: 110, outline: "none" }}
-            />
-            <select
-              value={newGroupMarket}
-              onChange={e => setNewGroupMarket(e.target.value as Market)}
-              style={{ fontFamily: "Courier New", fontSize: "0.72rem", background: "#002040", border: "1px solid rgba(8,120,164,0.5)", borderRadius: 4, color: "var(--text)", padding: "3px 6px", outline: "none", cursor: "pointer" }}
-            >
-              <option value="US">🇺🇸 US</option>
-              <option value="TW">🇹🇼 TW</option>
-            </select>
-            <button className="dash-btn dash-btn-sm" onClick={handleCreateGroup}>add</button>
-            <button className="dash-btn dash-btn-sm" onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupMarket("US"); }}>cancel</button>
-          </div>
-        )}
+          {/* Divider before fixed tabs */}
+          {groupNames.length > 0 && <span className="main-tab-divider" />}
 
-        {/* Divider before fixed tabs */}
-        {groupNames.length > 0 && (
-          <span style={{ width: 1, height: 18, background: "rgba(8,120,164,0.35)", margin: "0 4px", flexShrink: 0 }} />
-        )}
-
-        {/* Fixed tabs: 市場 + 加密貨幣 */}
-        <button className={`tab-btn${tab === marketTabIdx ? " active" : ""}`} onClick={() => handleSetTab(marketTabIdx)}>
-          📈 市場 <span style={{ fontSize: "0.6em", opacity: 0.6, fontWeight: 400, letterSpacing: 0 }}>Beta</span>
-        </button>
-        <button className={`tab-btn${tab === cryptoTabIdx ? " active" : ""}`} onClick={() => handleSetTab(cryptoTabIdx)}>
-          ₿ 加密貨幣
-        </button>
+          {/* Fixed tabs: 市場 + 加密貨幣 */}
+          <button className={`tab-btn${tab === marketTabIdx ? " active" : ""}`} onClick={() => handleSetTab(marketTabIdx)}>
+            📈 市場 <span style={{ fontSize: "0.6em", opacity: 0.6, fontWeight: 400, letterSpacing: 0 }}>Beta</span>
+          </button>
+          <button className={`tab-btn${tab === cryptoTabIdx ? " active" : ""}`} onClick={() => handleSetTab(cryptoTabIdx)}>
+            ₿ 加密貨幣
+          </button>
+        </div>
       </div>
 
       {/* Tab content — gated on settingsLoaded to prevent useMock=false flash on page refresh */}

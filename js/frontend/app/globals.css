@@ -90,6 +90,51 @@ html, body {
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+.main-tab-bar {
+  align-items: center;
+}
+.main-tab-fixed {
+  flex: 0 0 auto;
+}
+.main-tab-scroll {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.main-group-tabs {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.main-tab-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(8,120,164,0.35);
+  margin: 0 4px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .main-tab-bar {
+    overflow: hidden;
+  }
+  .main-tab-scroll {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .main-tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .main-tab-scroll .tab-btn,
+  .main-tab-scroll > div,
+  .main-group-tabs > div {
+    flex: 0 0 auto;
+  }
+}
 
 /* ── Table ──────────────────────────────────────────────────────────────────── */
 .pnl-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
