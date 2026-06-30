@@ -75,6 +75,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
+  const [selectedName, setSelectedName] = useState("");
   const [hoveredSugg, setHoveredSugg] = useState(-1);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -133,7 +134,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
       }
       const res = await api.addGroupTicker(groupName, t);
       onTickersChange(res.tickers);
-      setAddInput("");
+      setAddInput(""); setSelectedName("");
       setShowAdd(false);
     } catch (e: unknown) {
       setAddError((e as Error).message);
@@ -252,7 +253,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
 
         <button className="dash-btn dash-btn-sm"
           disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
-          onClick={() => { if (!useMock) { setShowAdd(s => !s); setSuggestions([]); setAddInput(""); } }}>
+          onClick={() => { if (!useMock) { setShowAdd(s => !s); setSuggestions([]); setAddInput(""); setSelectedName(""); } }}>
           {showAdd ? "✕ 取消" : "+ 新增股票"}
         </button>
       </div>
@@ -273,18 +274,27 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
               value={addInput}
               onChange={e => {
                 const v = market === "TW" ? e.target.value : e.target.value.toUpperCase();
-                setAddInput(v);
+                setAddInput(v); setSelectedName("");
                 if (market === "TW") searchTw(v); else setSuggestions([]);
                 setAddError("");
               }}
-              onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setSuggestions([]); }}
+              onKeyDown={e => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Enter") handleAdd();
+                if (e.key === "Escape") setSuggestions([]);
+              }}
               onBlur={() => setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150)}
             />
+            {selectedName && (
+              <div style={{ fontSize: "0.7rem", color: "var(--teal)", marginTop: 3, whiteSpace: "nowrap", letterSpacing: "0.02em" }}>
+                {selectedName}
+              </div>
+            )}
             {suggestions.length > 0 && (
               <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
                 {suggestions.map((s, i) => (
                   <div key={s.code}
-                    onMouseDown={() => { setAddInput(s.code); setSuggestions([]); setHoveredSugg(-1); }}
+                    onMouseDown={() => { setAddInput(s.code); setSelectedName(s.name); setSuggestions([]); setHoveredSugg(-1); }}
                     onMouseEnter={() => setHoveredSugg(i)}
                     onMouseLeave={() => setHoveredSugg(-1)}
                     style={{ padding: "5px 10px", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", fontSize: "0.78rem", background: hoveredSugg === i ? "rgba(30,207,214,0.1)" : "transparent", borderBottom: i < suggestions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>

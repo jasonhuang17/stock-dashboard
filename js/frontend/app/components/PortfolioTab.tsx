@@ -206,6 +206,7 @@ function ManageTab({
   const [adding, setAdding] = useState(false);
   const [tickerStatus, setTickerStatus] = useState<"idle" | "checking" | "ok" | "duplicate" | "notfound">("idle");
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
+  const [selectedName, setSelectedName] = useState("");
   const [hoveredSugg, setHoveredSugg] = useState(-1);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggClickedRef = useRef(false);
@@ -252,7 +253,7 @@ function ManageTab({
         if (!exists) { setErr(`找不到代號 ${t}`); setAdding(false); return; }
       }
       await api.addPosition(account, t, sh, tc / sh, tc);
-      setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle"); setSuggestions([]);
+      setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle"); setSuggestions([]); setSelectedName("");
       onRefresh();
     } catch (e: unknown) {
       const msg = (e as Error).message;
@@ -309,18 +310,22 @@ function ManageTab({
                   value={ticker}
                   onChange={e => {
                     const v = currency === "TWD" ? e.target.value : e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
-                    setTicker(v); setTickerStatus("idle"); setErr("");
+                    setTicker(v); setTickerStatus("idle"); setErr(""); setSelectedName("");
                     if (currency === "TWD") searchTw(v); else setSuggestions([]);
                   }}
                   onBlur={() => { setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150); if (!suggClickedRef.current) handleTickerBlur(); suggClickedRef.current = false; }}
-                  onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setSuggestions([]); }} />
+                  onKeyDown={e => {
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === "Enter") handleAdd();
+                    if (e.key === "Escape") setSuggestions([]);
+                  }} />
                 {suggestions.length > 0 && (
                   <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
                     {suggestions.map((s, i) => (
                       <div key={s.code}
                         onMouseDown={() => {
                           suggClickedRef.current = true;
-                          setTicker(s.code); setSuggestions([]); setHoveredSugg(-1); setTickerStatus("checking");
+                          setTicker(s.code); setSelectedName(s.name); setSuggestions([]); setHoveredSugg(-1); setTickerStatus("checking");
                           api.validateTW(s.code).then(({ exists }) => setTickerStatus(exists ? "ok" : "notfound")).catch(() => setTickerStatus("idle"));
                         }}
                         onMouseEnter={() => setHoveredSugg(i)}
@@ -357,7 +362,7 @@ function ManageTab({
             ) : (
               <>
                 {tickerStatus === "checking"  && <span style={{ color: "var(--dim)" }}>驗證中 <span className="spinner" style={{ width: 8, height: 8, borderWidth: 1.5 }} /></span>}
-                {tickerStatus === "ok"        && <span style={{ color: "var(--teal)" }}>✓ 代號有效</span>}
+                {tickerStatus === "ok"        && <span style={{ color: "var(--teal)" }}>✓ {selectedName || "代號有效"}</span>}
                 {tickerStatus === "duplicate" && <span style={{ color: "var(--red)" }}>{ticker} 已存在，請用編輯更新</span>}
                 {tickerStatus === "notfound"  && <span style={{ color: "var(--red)" }}>找不到代號 {ticker}</span>}
               </>
