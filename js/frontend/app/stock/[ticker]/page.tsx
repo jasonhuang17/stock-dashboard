@@ -64,6 +64,7 @@ export default function StockPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   // Determine default period: OPEN → "intra", anything else → "1d"
   useEffect(() => {
@@ -78,6 +79,15 @@ export default function StockPage() {
   useEffect(() => {
     const id = setInterval(() => setRefreshKey(k => k + 1), REFRESH_INTERVAL);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const first = window.setTimeout(() => setNowMs(Date.now()), 0);
+    const id = window.setInterval(() => setNowMs(Date.now()), REFRESH_INTERVAL);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
   }, []);
 
   // Fetch the 10 most recent trading days when intra mode is active
@@ -146,14 +156,13 @@ export default function StockPage() {
   }
 
   // Fix x-axis domain: intra → session open/close; 1d → rolling 24h ending now
-  const nowMs = Date.now();
   const xDomainStart: number | "dataMin" =
     period === "intra" && sessionBoundaries.length > 0 ? sessionBoundaries[0].open :
-    period === "1d" ? nowMs - 86_400_000 : "dataMin";
+    period === "1d" && nowMs != null ? nowMs - 86_400_000 : "dataMin";
   const xDomainEnd: number | "dataMax" =
     period === "intra" && sessionBoundaries.length > 0 && sessionBoundaries[0].close != null
       ? sessionBoundaries[0].close :
-    period === "1d" ? nowMs : "dataMax";
+    period === "1d" && nowMs != null ? nowMs : "dataMax";
 
   return (
     <div style={{ padding: "1rem 2rem", minHeight: "100vh" }}>

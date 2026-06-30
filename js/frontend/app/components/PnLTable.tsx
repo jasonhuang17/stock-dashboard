@@ -215,12 +215,16 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const [appliedTo, setAppliedTo]   = useState<string | null>(null);
   const [appliedAll, setAppliedAll]         = useState(false);
   const [appliedAllAccts, setAppliedAllAccts] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(id);
+    const first = window.setTimeout(() => setNow(Date.now()), 0);
+    const id = window.setInterval(() => setNow(Date.now()), 10_000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -332,7 +336,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
   const oldestFetch = rows
     .filter(r => r.price !== null && r.fetched_at != null)
     .reduce<number | null>((min, r) => min === null ? r.fetched_at! : Math.min(min, r.fetched_at!), null);
-  const staleMinutes = oldestFetch != null ? Math.floor((now / 1000 - oldestFetch) / 60) : null;
+  const staleMinutes = oldestFetch != null && now != null ? Math.floor((now / 1000 - oldestFetch) / 60) : null;
   const staleLabel = staleMinutes != null && staleMinutes >= 2
     ? staleMinutes < 60 ? `${staleMinutes} 分鐘前` : `${Math.floor(staleMinutes / 60)} 小時前`
     : null;
@@ -515,7 +519,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                           <div>{c.fmt(row)}</div>
                           <div style={{ fontSize: "0.65rem", color: "var(--dim)", opacity: 0.7 }}>
                             {(() => {
-                              if (!row.fetched_at) return "快取";
+                              if (!row.fetched_at || now == null) return "快取";
                               const mins = Math.floor((now / 1000 - row.fetched_at) / 60);
                               if (mins < 1) return "< 1分鐘前";
                               if (mins < 60) return `${mins}分鐘前`;
