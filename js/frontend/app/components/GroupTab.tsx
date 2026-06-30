@@ -164,6 +164,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
   }
 
   const cols = tickers.length <= 3 ? tickers.length : tickers.length <= 6 ? 3 : 4;
+  const gridStyle = { "--desktop-cols": `repeat(${cols}, 1fr)` } as React.CSSProperties & { "--desktop-cols": string };
   const displayQuotes = sorted(quotes.length ? quotes : tickers.map(t => ({ ticker: t, price: null, pct: null })));
   const pmMap = Object.fromEntries(premarket.map(p => [p.ticker, p]));
 
@@ -196,12 +197,11 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
       </div>
 
       {/* Top controls row: add stock (real mode only) + sort controls */}
-      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div className="group-controls">
         {!useMock && (
-          <div style={{ position: "relative" }}>
+          <div className="group-add-field">
             <input
-              className="dash-input"
-              style={{ width: 140 }}
+              className="dash-input group-add-input"
               placeholder={market === "TW" ? "代號或中文名稱" : "代號或公司名稱"}
               value={addInput}
               onChange={e => {
@@ -243,11 +243,10 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
             {adding ? <span className="spinner" /> : "新增"}
           </button>
         )}
-        {!useMock && addError && <span style={{ color: "var(--red)", fontSize: "0.75rem", alignSelf: "center" }}>{addError}</span>}
+        {!useMock && addError && <span className="group-add-error">{addError}</span>}
 
         <select
-          className="dash-input"
-          style={{ width: "auto" }}
+          className="dash-input group-sort-select"
           value={sortMode}
           onChange={e => {
             const next = e.target.value as typeof sortMode;
@@ -280,7 +279,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
 
       {/* Cards */}
       {subTab === "cards" && (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+        <div className="group-card-grid" style={gridStyle}>
           {displayQuotes.map(q => (
             <div key={q.ticker} style={{ position: "relative" }}>
               <Link href={`/stock/${encodeURIComponent(q.ticker)}?market=${market}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
@@ -304,7 +303,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
 
       {/* Premarket */}
       {subTab === "premarket" && (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+        <div className="group-card-grid" style={gridStyle}>
           {tickers.map(t => (
             <Link key={t} href={`/stock/${encodeURIComponent(t)}?market=${market}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
               <PremarketCard q={pmMap[t] ?? { ticker: t, price: null, pct: null, prev_close: null, time: null }} />

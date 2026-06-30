@@ -204,6 +204,68 @@ html, body {
 }
 .ticker-chip-remove:hover { color: var(--red); }
 
+/* ── Group watchlist layout ────────────────────────────────────────────────── */
+.group-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.group-add-field {
+  position: relative;
+  flex: 0 0 auto;
+}
+.group-add-input {
+  width: 140px;
+}
+.group-sort-select {
+  width: auto;
+}
+.group-add-error {
+  color: var(--red);
+  font-size: 0.75rem;
+  align-self: center;
+}
+.group-card-grid {
+  display: grid;
+  grid-template-columns: var(--desktop-cols);
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .group-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .group-add-field {
+    min-width: 0;
+  }
+  .group-add-input,
+  .group-sort-select {
+    width: 100%;
+  }
+  .group-sort-select,
+  .group-controls > .dash-btn-sm,
+  .group-add-error {
+    grid-column: 1 / -1;
+  }
+  .group-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .stock-card {
+    min-height: 84px;
+  }
+}
+
+@media (min-width: 561px) and (max-width: 760px) {
+  .group-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ── Chart switcher ─────────────────────────────────────────────────────────── */
 .chart-switcher { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .chart-btn {
