@@ -6,6 +6,7 @@ import concurrent.futures
 import json
 import os
 import threading
+import urllib.parse
 import urllib.request
 from datetime import datetime, time as dtime, timedelta
 from typing import List, Optional
@@ -1579,6 +1580,40 @@ def tw_search(q: str = ""):
         elif q in name:
             name_match.append({"code": code, "name": name})
     return (exact + prefix + name_match)[:8]
+
+
+_us_search_cache: TTLCache = TTLCache(maxsize=500, ttl=120)
+_us_search_lock = threading.Lock()
+
+
+@app.get("/api/us-search")
+def us_search(q: str = ""):
+    """Search US stocks/ETFs by ticker or company name via Yahoo Finance suggest API."""
+    q = q.strip()
+    if not q:
+        return []
+    key = q.lower()
+    with _us_search_lock:
+        if key in _us_search_cache:
+            return _us_search_cache[key]
+    try:
+        url = (
+            "https://query1.finance.yahoo.com/v1/finance/search"
+            f"?q={urllib.parse.quote(q)}&quotesCount=8&newsCount=0&enableFuzzyQuery=false"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        results = [
+            {"code": item["symbol"], "name": item.get("shortname") or item.get("longname", "")}
+            for item in data.get("quotes", [])
+            if item.get("isYahooFinance") and item.get("typeDisp") in ("Equity", "ETF", "Index")
+        ][:8]
+    except Exception:
+        results = []
+    with _us_search_lock:
+        _us_search_cache[key] = results
+    return results
 
 
 _crypto_validate_cache: TTLCache = TTLCache(maxsize=200, ttl=300)

@@ -120,6 +120,9 @@ export const api = {
   twSearch: (q: string) =>
     get<{ code: string; name: string }[]>(`/api/tw-search?q=${encodeURIComponent(q)}`),
 
+  usSearch: (q: string) =>
+    get<{ code: string; name: string }[]>(`/api/us-search?q=${encodeURIComponent(q)}`),
+
   getSettings: () =>
     get<{ use_mock: boolean; col_vis?: string[]; col_order?: string[]; pnl_cols?: Record<string, { vis: string[]; order: string[]; dividers?: string[] }>; protected_accounts?: string[]; theme?: string; crypto_sort?: { col: string; dir: "asc" | "desc" }; group_sorts?: Record<string, string>; crypto_tickers?: string[]; account_groups?: AccountGroup[] }>("/api/settings"),
 

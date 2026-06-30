@@ -118,6 +118,15 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
     }, 200);
   }
 
+  function searchUs(q: string) {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!q.trim()) { setSuggestions([]); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try { setSuggestions(await api.usSearch(q.trim())); }
+      catch { setSuggestions([]); }
+    }, 300);
+  }
+
   async function handleAdd() {
     const t = addInput.trim().toUpperCase();
     if (!t) { setAddError("請輸入代號"); return; }
@@ -270,12 +279,13 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
             <input
               className="dash-input"
               style={{ width: 140 }}
-              placeholder={market === "TW" ? "代號或中文名稱" : "代號 (e.g. NVDA)"}
+              placeholder={market === "TW" ? "代號或中文名稱" : "代號或公司名稱"}
               value={addInput}
               onChange={e => {
-                const v = market === "TW" ? e.target.value : e.target.value.toUpperCase();
+                const v = e.target.value;
                 setAddInput(v); setSelectedName("");
-                if (market === "TW") searchTw(v); else setSuggestions([]);
+                if (market === "TW") searchTw(v);
+                else searchUs(v);
                 setAddError("");
               }}
               onKeyDown={e => {

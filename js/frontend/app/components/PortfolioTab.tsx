@@ -226,6 +226,15 @@ function ManageTab({
     }, 200);
   }
 
+  function searchUs(q: string) {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!q.trim()) { setSuggestions([]); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try { setSuggestions(await api.usSearch(q.trim())); }
+      catch { setSuggestions([]); }
+    }, 300);
+  }
+
   async function handleTickerBlur() {
     const t = ticker.trim().toUpperCase();
     if (!t) { setTickerStatus("idle"); return; }
@@ -306,12 +315,12 @@ function ManageTab({
             <div>
               <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
               <div style={{ position: "relative" }}>
-                <input className="dash-input" style={{ width: 120 }} placeholder={currency === "TWD" ? "代號或中文名稱" : "AAPL"}
+                <input className="dash-input" style={{ width: 120 }} placeholder={currency === "TWD" ? "代號或中文名稱" : "代號或公司名稱"}
                   value={ticker}
                   onChange={e => {
-                    const v = currency === "TWD" ? e.target.value : e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+                    const v = currency === "TWD" ? e.target.value : e.target.value;
                     setTicker(v); setTickerStatus("idle"); setErr(""); setSelectedName("");
-                    if (currency === "TWD") searchTw(v); else setSuggestions([]);
+                    if (currency === "TWD") searchTw(v); else searchUs(v);
                   }}
                   onBlur={() => { setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150); if (!suggClickedRef.current) handleTickerBlur(); suggClickedRef.current = false; }}
                   onKeyDown={e => {
@@ -326,7 +335,8 @@ function ManageTab({
                         onMouseDown={() => {
                           suggClickedRef.current = true;
                           setTicker(s.code); setSelectedName(s.name); setSuggestions([]); setHoveredSugg(-1); setTickerStatus("checking");
-                          api.validateTW(s.code).then(({ exists }) => setTickerStatus(exists ? "ok" : "notfound")).catch(() => setTickerStatus("idle"));
+                          const validate = currency === "TWD" ? api.validateTW(s.code) : api.validateUS(s.code);
+                          validate.then(({ exists }) => setTickerStatus(exists ? "ok" : "notfound")).catch(() => setTickerStatus("idle"));
                         }}
                         onMouseEnter={() => setHoveredSugg(i)}
                         onMouseLeave={() => setHoveredSugg(-1)}
