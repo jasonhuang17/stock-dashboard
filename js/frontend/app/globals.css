@@ -136,6 +136,54 @@ html, body {
   }
 }
 
+.portfolio-tab-bar {
+  align-items: center;
+  gap: 4px;
+}
+.portfolio-tab-fixed {
+  flex: 0 0 auto;
+}
+.portfolio-tab-scroll {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+.portfolio-account-tabs {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.portfolio-tab-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(30,207,214,0.25);
+  margin: 2px 4px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .portfolio-tab-bar {
+    overflow: hidden;
+  }
+  .portfolio-tab-scroll {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .portfolio-tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .portfolio-tab-scroll .dash-btn,
+  .portfolio-tab-scroll > div,
+  .portfolio-account-tabs > div {
+    flex: 0 0 auto;
+  }
+}
+
 /* ── Table ──────────────────────────────────────────────────────────────────── */
 .pnl-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
 .pnl-table th {

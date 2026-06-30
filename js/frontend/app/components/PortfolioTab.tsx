@@ -1016,64 +1016,66 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
   return (
     <div>
       {/* Account tabs */}
-      <div className="tab-bar" style={{ flexWrap: "wrap", gap: 4 }}>
-        <button className={`tab-btn${acctTab === 0 ? " active" : ""}`} onClick={() => { setAcctTab(0); sessionStorage.setItem("portfolio-acct-tab", "0"); }}>
+      <div className="tab-bar portfolio-tab-bar">
+        <button className={`tab-btn portfolio-tab-fixed${acctTab === 0 ? " active" : ""}`} onClick={() => { setAcctTab(0); sessionStorage.setItem("portfolio-acct-tab", "0"); }}>
           📊 整體損益
         </button>
-        <div style={{ width: 1, background: "rgba(30,207,214,0.25)", alignSelf: "stretch", margin: "2px 4px" }} />
-        <DndContext sensors={acctSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
-          const { active, over } = event;
-          if (over && active.id !== over.id) {
-            const keys = ACCOUNTS.map(a => a.key);
-            const oldIdx = keys.indexOf(active.id as string);
-            const newIdx = keys.indexOf(over.id as string);
-            handleReorderAccounts(arrayMove(keys, oldIdx, newIdx));
-          }
-        }}>
-          <SortableContext items={ACCOUNTS.map(a => a.key)} strategy={horizontalListSortingStrategy}>
-            <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
-              {ACCOUNTS.map((acct, i) => (
-                <SortableAcctTab key={acct.key} id={acct.key} label={acct.label}
-                  isActive={acctTab === i + 1}
-                  isProtected={protectedAccounts.has(acct.key)}
-                  isRenaming={renamingAcct === acct.key}
-                  useMock={useMock}
-                  renameValue={renameAcctValue}
-                  onActivate={() => { setAcctTab(i + 1); sessionStorage.setItem("portfolio-acct-tab", String(i + 1)); }}
-                  onDoubleClick={() => { if (!useMock) { setRenamingAcct(acct.key); setRenameAcctValue(acct.key); } }}
-                  onDelete={() => handleDeleteAccount(acct.key)}
-                  onRenameChange={v => setRenameAcctValue(v)}
-                  onRenameBlur={handleRenameAccount}
-                  onRenameKeyDown={e => { if (e.key === "Enter") handleRenameAccount(); if (e.key === "Escape") setRenamingAcct(null); }}
+        <div className="portfolio-tab-scroll">
+          <div className="portfolio-tab-divider" />
+          <DndContext sensors={acctSensors} collisionDetection={closestCenter} onDragEnd={(event: DragEndEvent) => {
+            const { active, over } = event;
+            if (over && active.id !== over.id) {
+              const keys = ACCOUNTS.map(a => a.key);
+              const oldIdx = keys.indexOf(active.id as string);
+              const newIdx = keys.indexOf(over.id as string);
+              handleReorderAccounts(arrayMove(keys, oldIdx, newIdx));
+            }
+          }}>
+            <SortableContext items={ACCOUNTS.map(a => a.key)} strategy={horizontalListSortingStrategy}>
+              <div className="portfolio-account-tabs">
+                {ACCOUNTS.map((acct, i) => (
+                  <SortableAcctTab key={acct.key} id={acct.key} label={acct.label}
+                    isActive={acctTab === i + 1}
+                    isProtected={protectedAccounts.has(acct.key)}
+                    isRenaming={renamingAcct === acct.key}
+                    useMock={useMock}
+                    renameValue={renameAcctValue}
+                    onActivate={() => { setAcctTab(i + 1); sessionStorage.setItem("portfolio-acct-tab", String(i + 1)); }}
+                    onDoubleClick={() => { if (!useMock) { setRenamingAcct(acct.key); setRenameAcctValue(acct.key); } }}
+                    onDelete={() => handleDeleteAccount(acct.key)}
+                    onRenameChange={v => setRenameAcctValue(v)}
+                    onRenameBlur={handleRenameAccount}
+                    onRenameKeyDown={e => { if (e.key === "Enter") handleRenameAccount(); if (e.key === "Escape") setRenamingAcct(null); }}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          {/* Add account button */}
+          {!useMock && (
+            addingAccount ? (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <input
+                  autoFocus
+                  value={newAcctName}
+                  onChange={e => setNewAcctName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleCreateAccount(); if (e.key === "Escape") setAddingAccount(false); }}
+                  placeholder="帳戶名稱"
+                  style={{ fontSize: "0.78rem", fontFamily: "Courier New", background: "#001d3a", border: "1px solid var(--teal)", color: "var(--teal)", borderRadius: 4, padding: "3px 8px", outline: "none", width: 140 }}
                 />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-        {/* Add account button */}
-        {!useMock && (
-          addingAccount ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <input
-                autoFocus
-                value={newAcctName}
-                onChange={e => setNewAcctName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") handleCreateAccount(); if (e.key === "Escape") setAddingAccount(false); }}
-                placeholder="帳戶名稱"
-                style={{ fontSize: "0.78rem", fontFamily: "Courier New", background: "#001d3a", border: "1px solid var(--teal)", color: "var(--teal)", borderRadius: 4, padding: "3px 8px", outline: "none", width: 140 }}
-              />
-              <select value={newAcctCurrency} onChange={e => setNewAcctCurrency(e.target.value as Currency)}
-                style={{ fontSize: "0.75rem", fontFamily: "Courier New", background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", color: "var(--text)", borderRadius: 4, padding: "3px 6px" }}>
-                <option value="USD">美股 (USD)</option>
-                <option value="TWD">台股 (TWD)</option>
-              </select>
-              <button className="dash-btn dash-btn-sm" onClick={handleCreateAccount}>新增</button>
-              <button className="dash-btn dash-btn-sm" onClick={() => setAddingAccount(false)}>取消</button>
-            </div>
-          ) : (
-            <button className="dash-btn dash-btn-sm" onClick={() => setAddingAccount(true)} style={{ fontSize: "0.72rem" }}>＋ 新增帳戶</button>
-          )
-        )}
+                <select value={newAcctCurrency} onChange={e => setNewAcctCurrency(e.target.value as Currency)}
+                  style={{ fontSize: "0.75rem", fontFamily: "Courier New", background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", color: "var(--text)", borderRadius: 4, padding: "3px 6px" }}>
+                  <option value="USD">美股 (USD)</option>
+                  <option value="TWD">台股 (TWD)</option>
+                </select>
+                <button className="dash-btn dash-btn-sm" onClick={handleCreateAccount}>新增</button>
+                <button className="dash-btn dash-btn-sm" onClick={() => setAddingAccount(false)}>取消</button>
+              </div>
+            ) : (
+              <button className="dash-btn dash-btn-sm" onClick={() => setAddingAccount(true)} style={{ fontSize: "0.72rem" }}>＋ 新增帳戶</button>
+            )
+          )}
+        </div>
       </div>
 
       {acctTab === 0 && <OverallTab portfolio={portfolio} refreshKey={refreshKey} useMock={useMock} />}
