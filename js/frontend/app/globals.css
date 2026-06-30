@@ -33,6 +33,134 @@ html, body {
   text-shadow: 0 0 22px rgba(30, 207, 214, 0.35);
 }
 
+/* ── App shell / header ─────────────────────────────────────────────────────── */
+.dashboard-shell {
+  padding: 0.5rem 2rem 2rem;
+  max-width: 100%;
+  min-height: 100vh;
+}
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: 0 -2rem;
+  padding: 14px 2rem 10px;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.dashboard-header-status,
+.dashboard-header-actions {
+  display: flex;
+  align-items: center;
+}
+.dashboard-header-status {
+  gap: 10px;
+  min-width: 0;
+}
+.dashboard-header-actions {
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.market-time {
+  color: var(--teal);
+  font-size: 0.78rem;
+  font-family: "Courier New", Courier, monospace;
+}
+.market-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(8,120,164,0.35);
+  flex: 0 0 auto;
+}
+.demo-toggle {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(8,120,164,0.4);
+  cursor: pointer;
+}
+.demo-banner {
+  position: sticky;
+  top: 53px;
+  z-index: 49;
+  margin: 0 -2rem;
+  padding: 10px 2rem;
+  background: rgba(30,15,0,0.95);
+  border-bottom: 1px solid rgba(237,209,112,0.45);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.76rem;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(8px);
+}
+.data-countdown {
+  font-size: 0.7rem;
+  color: var(--teal);
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-shell {
+    padding: 0.5rem 1rem 2rem;
+    overflow-x: hidden;
+  }
+  .dashboard-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin: 0 -1rem;
+    padding: 12px 1rem 10px;
+  }
+  .dashboard-header-status {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 7px 10px;
+  }
+  .dashboard-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dashboard-header-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .dash-title {
+    flex: 1 1 100%;
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+  .status-pill {
+    padding: 3px 11px;
+  }
+  .market-time {
+    font-size: 0.72rem;
+  }
+  .market-divider {
+    display: none;
+  }
+  .data-countdown {
+    white-space: normal;
+    line-height: 1.55;
+  }
+  .demo-banner {
+    top: 102px;
+    margin: 0 -1rem;
+    padding: 9px 1rem;
+    flex-wrap: wrap;
+  }
+}
+
 /* ── Status pill ─────────────────────────────────────────────────────────────── */
 .status-pill {
   display: inline-flex;

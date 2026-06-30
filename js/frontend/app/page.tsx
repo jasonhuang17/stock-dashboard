@@ -247,28 +247,28 @@ export default function Dashboard() {
   }, [groupNames.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ padding: "0.5rem 2rem 2rem", maxWidth: "100%", minHeight: "100vh" }}>
+    <div className="dashboard-shell">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, margin: "0 -2rem", padding: "14px 2rem 10px", transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s", background: scrolled ? "#002040" : "#001d3a", borderBottom: scrolled ? "1px solid rgba(8,120,164,0.35)" : "1px solid transparent", boxShadow: scrolled ? "0 4px 16px rgba(0,0,0,0.35)" : "none" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="dashboard-header" style={{ background: scrolled ? "#002040" : "#001d3a", borderBottom: scrolled ? "1px solid rgba(8,120,164,0.35)" : "1px solid transparent", boxShadow: scrolled ? "0 4px 16px rgba(0,0,0,0.35)" : "none" }}>
+        <div className="dashboard-header-status">
           <span className="dash-title">◈ STOCK DASHBOARD</span>
           {status?.us && (
             <>
               <span className={`status-pill ${statusClass(status.us.status)}`}>{status.us.status}</span>
-              <span style={{ color: "var(--teal)", fontSize: "0.78rem", fontFamily: "Courier New" }}>ET {status.us.time}</span>
+              <span className="market-time">ET {status.us.time}</span>
             </>
           )}
-          <span style={{ width: 1, height: 14, background: "rgba(8,120,164,0.35)", flexShrink: 0 }} />
+          <span className="market-divider" />
           {status?.tw && (
             <>
               <span className={`status-pill ${statusClass(status.tw.status)}`}>{status.tw.status}</span>
-              <span style={{ color: "var(--teal)", fontSize: "0.78rem", fontFamily: "Courier New" }}>台北 {status.tw.time}</span>
+              <span className="market-time">台北 {status.tw.time}</span>
             </>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="dashboard-header-actions">
           <ThemeSelector />
-          <button onClick={handleToggleMock} style={{ fontFamily: "Courier New", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.08em", padding: "3px 10px", borderRadius: 20, border: `1px solid ${useMock ? "rgba(237,209,112,0.6)" : "rgba(8,120,164,0.4)"}`, background: useMock ? "rgba(237,209,112,0.12)" : "transparent", color: useMock ? "var(--gold)" : "var(--dim)", cursor: "pointer" }}>
+          <button className="demo-toggle" onClick={handleToggleMock} style={{ borderColor: useMock ? "rgba(237,209,112,0.6)" : "rgba(8,120,164,0.4)", background: useMock ? "rgba(237,209,112,0.12)" : "transparent", color: useMock ? "var(--gold)" : "var(--dim)" }}>
             {useMock ? "◈ DEMO" : "DEMO"}
           </button>
           <button className="dash-btn" onClick={handleRefresh}>↻ REFRESH</button>
@@ -277,7 +277,7 @@ export default function Dashboard() {
 
       {/* Demo mode banner — sticky, taller, consistent with header */}
       {useMock && (
-        <div style={{ position: "sticky", top: 53, zIndex: 49, margin: "0 -2rem", padding: "10px 2rem", background: "rgba(30,15,0,0.95)", borderBottom: "1px solid rgba(237,209,112,0.45)", display: "flex", alignItems: "center", gap: 12, fontSize: "0.76rem", fontFamily: "Courier New", letterSpacing: "0.06em", backdropFilter: "blur(8px)" }}>
+        <div className="demo-banner">
           <span style={{ color: "var(--gold)", fontWeight: 700, fontSize: "0.82rem" }}>⚡ DEMO MODE</span>
           <span style={{ color: "rgba(237,209,112,0.60)" }}>— showing sample data, not your real portfolio</span>
           <button onClick={handleToggleMock} style={{ marginLeft: "auto", color: "rgba(237,209,112,0.7)", background: "none", border: "1px solid rgba(237,209,112,0.35)", borderRadius: 4, cursor: "pointer", fontSize: "0.72rem", fontFamily: "Courier New", padding: "2px 8px" }}>exit demo ×</button>
@@ -285,7 +285,7 @@ export default function Dashboard() {
       )}
 
       {/* Countdown */}
-      <div style={{ fontSize: "0.7rem", color: "var(--teal)", letterSpacing: "0.06em", marginBottom: 2 }}>
+      <div className="data-countdown">
         ↻&nbsp; next data update in {countdown}s · prices up to ~30s delayed (Yahoo Finance)
       </div>
       <hr className="dash-hr" style={{ marginBottom: 12 }} />
