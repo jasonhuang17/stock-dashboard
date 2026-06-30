@@ -555,9 +555,10 @@ function SortableGroupRow({ group, idx, allAccounts, portfolio, useMock, takenAc
 function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; refreshKey: number; useMock: boolean }) {
   const [rowMap, setRowMap]           = useState<Record<string, PortfolioRow[]>>({});
   const [loading, setLoading]         = useState(true);
-  const [savedGroups, setSavedGroups] = useState<AccountGroup[]>([]);
-  const [draftGroups, setDraftGroups] = useState<AccountGroup[]>([]);
-  const [isDirty, setIsDirty]         = useState(false);
+  const [savedGroups, setSavedGroups]   = useState<AccountGroup[]>([]);
+  const [draftGroups, setDraftGroups]   = useState<AccountGroup[]>([]);
+  const [isDirty, setIsDirty]           = useState(false);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [editOpen, setEditOpen]       = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
@@ -581,7 +582,8 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
       const groups = s.account_groups ?? [];
       setSavedGroups(groups);
       setDraftGroups(groups);
-    }).catch(() => {});
+      setGroupsLoaded(true);
+    }).catch(() => { setGroupsLoaded(true); }); // allow save even if load fails
   }, []);
 
   function markDirty(groups: AccountGroup[]) {
@@ -787,12 +789,12 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
           )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(30,207,214,0.15)" }}>
-            <button onClick={handleSave} disabled={!isDirty || useMock}
+            <button onClick={handleSave} disabled={!isDirty || useMock || !groupsLoaded}
               style={{
-                background: isDirty && !useMock ? "rgba(30,207,214,0.15)" : "none",
-                border: `1px solid ${isDirty && !useMock ? "rgba(30,207,214,0.5)" : "rgba(30,207,214,0.15)"}`,
-                borderRadius: 4, cursor: isDirty && !useMock ? "pointer" : "not-allowed",
-                color: isDirty && !useMock ? "var(--teal)" : "var(--dim)",
+                background: isDirty && !useMock && groupsLoaded ? "rgba(30,207,214,0.15)" : "none",
+                border: `1px solid ${isDirty && !useMock && groupsLoaded ? "rgba(30,207,214,0.5)" : "rgba(30,207,214,0.15)"}`,
+                borderRadius: 4, cursor: isDirty && !useMock && groupsLoaded ? "pointer" : "not-allowed",
+                color: isDirty && !useMock && groupsLoaded ? "var(--teal)" : "var(--dim)",
                 fontSize: "0.78rem", padding: "4px 14px", fontFamily: "Courier New",
               }}>
               儲存

@@ -837,45 +837,64 @@ def get_settings():
 
 @app.put("/api/settings")
 def put_settings(body: SettingsBody):
-    s = load_settings()
-    s_before = json.loads(json.dumps(s))
-    if body.use_mock is not None:
-        s["use_mock"] = body.use_mock
-    if body.col_vis is not None:
-        s["col_vis"] = body.col_vis
-    if body.col_order is not None:
-        s["col_order"] = body.col_order
-    if body.pnl_cols is not None:
-        existing = s.get("pnl_cols", {})
-        existing.update(body.pnl_cols)
-        s["pnl_cols"] = existing
-    if body.protected_accounts is not None:
-        s["protected_accounts"] = body.protected_accounts
-    if body.theme is not None:
-        s["theme"] = body.theme
-    if body.crypto_sort is not None:
-        s["crypto_sort"] = body.crypto_sort
-    if body.group_sorts is not None:
-        existing = s.get("group_sorts", {})
-        existing.update(body.group_sorts)
-        s["group_sorts"] = existing
-    if body.crypto_tickers is not None:
-        tickers = [str(t) for t in body.crypto_tickers if isinstance(t, str) and t]
-        if tickers:
-            s["crypto_tickers"] = tickers
-            with _crypto_cache_lock:
-                _crypto_cache.clear()
-    if body.account_groups is not None:
-        groups = []
-        for g in body.account_groups:
-            if isinstance(g, dict) and isinstance(g.get("name"), str) and isinstance(g.get("accounts"), list):
-                entry = {"name": g["name"], "accounts": [a for a in g["accounts"] if isinstance(a, str)]}
-                if g.get("locked"):
-                    entry["locked"] = True
-                groups.append(entry)
-        s["account_groups"] = groups
-    _log_settings_change(s_before, s)
-    save_settings(s)
+    # Hold the lock for the entire read-modify-write cycle to prevent concurrent
+    # requests from overwriting each other's changes with stale data.
+    clear_crypto = False
+    with _config_lock:
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                file_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            file_data = {}
+        s = file_data.get("settings", {})
+        s.setdefault("use_mock", False)
+        s.setdefault("theme", "dark-cyber")
+        s.setdefault("crypto_sort", {"col": "pct", "dir": "desc"})
+        s.setdefault("group_sorts", {})
+        s.setdefault("crypto_tickers", list(_DEFAULT_CRYPTO))
+        s.setdefault("account_groups", [])
+        s_before = json.loads(json.dumps(s))
+        if body.use_mock is not None:
+            s["use_mock"] = body.use_mock
+        if body.col_vis is not None:
+            s["col_vis"] = body.col_vis
+        if body.col_order is not None:
+            s["col_order"] = body.col_order
+        if body.pnl_cols is not None:
+            existing = s.get("pnl_cols", {})
+            existing.update(body.pnl_cols)
+            s["pnl_cols"] = existing
+        if body.protected_accounts is not None:
+            s["protected_accounts"] = body.protected_accounts
+        if body.theme is not None:
+            s["theme"] = body.theme
+        if body.crypto_sort is not None:
+            s["crypto_sort"] = body.crypto_sort
+        if body.group_sorts is not None:
+            existing_gs = s.get("group_sorts", {})
+            existing_gs.update(body.group_sorts)
+            s["group_sorts"] = existing_gs
+        if body.crypto_tickers is not None:
+            tickers = [str(t) for t in body.crypto_tickers if isinstance(t, str) and t]
+            if tickers:
+                s["crypto_tickers"] = tickers
+                clear_crypto = True
+        if body.account_groups is not None:
+            groups = []
+            for g in body.account_groups:
+                if isinstance(g, dict) and isinstance(g.get("name"), str) and isinstance(g.get("accounts"), list):
+                    entry = {"name": g["name"], "accounts": [a for a in g["accounts"] if isinstance(a, str)]}
+                    if g.get("locked"):
+                        entry["locked"] = True
+                    groups.append(entry)
+            s["account_groups"] = groups
+        _log_settings_change(s_before, s)
+        file_data["settings"] = s
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(file_data, f, ensure_ascii=False, indent=2)
+    if clear_crypto:
+        with _crypto_cache_lock:
+            _crypto_cache.clear()
     return s
 
 
