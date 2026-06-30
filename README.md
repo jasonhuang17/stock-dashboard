@@ -171,17 +171,6 @@ cd js/frontend && NEXT_PUBLIC_API_URL=http://<Mac 的 Tailscale IP>:8000 npm run
 lsof -ti tcp:8000 -ti tcp:3000 | xargs kill -9 2>/dev/null; ./start-js.sh
 ```
 
-**本地 debug logs**
-
-後端會把 API 連線與資料抓取摘要寫到本地 JSONL 檔，方便 debug iPhone / Tailscale / 瀏覽器連線問題。這些檔案已加入 `.gitignore`，不會進入 commit。
-
-```bash
-tail -f js/backend/access_log.jsonl
-tail -f js/backend/quote_log.jsonl
-tail -f js/backend/portfolio_log.jsonl
-tail -f js/backend/user_data_log.jsonl
-```
-
 ---
 
 ## 使用說明
