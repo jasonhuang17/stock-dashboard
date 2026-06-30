@@ -1341,6 +1341,12 @@ def get_history(ticker: str, period: str = "1y", date: Optional[str] = None):
                              start=dt.strftime("%Y-%m-%d"),
                              end=(dt + timedelta(days=1)).strftime("%Y-%m-%d"),
                              interval="1m", progress=False, auto_adjust=True, prepost=False)
+        elif period == "1d":
+            now_utc = datetime.now(pytz.utc)
+            start_utc = now_utc - timedelta(hours=24)
+            df = yf.download(fetch_ticker,
+                             start=start_utc, end=now_utc,
+                             interval="1m", progress=False, auto_adjust=True, prepost=True)
         elif period in ("2d", "3d", "4d", "5d"):
             n = int(period[0])
             df_full = yf.download(fetch_ticker, period="5d", interval="15m",
@@ -1357,9 +1363,8 @@ def get_history(ticker: str, period: str = "1y", date: Optional[str] = None):
             df = df_full.loc[[ts for ts in df_full.index
                                if ts.astimezone(et_tz).strftime("%Y-%m-%d") >= cutoff]]
         else:
-            prepost = period == "1d"
             df = yf.download(fetch_ticker, period=yf_period, interval=interval,
-                             progress=False, auto_adjust=True, prepost=prepost)
+                             progress=False, auto_adjust=True, prepost=False)
 
         if df is None or df.empty:
             return []

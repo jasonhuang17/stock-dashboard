@@ -63,11 +63,11 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Determine default period: PRE/POST → "1d", otherwise → "intra"
+  // Determine default period: OPEN → "intra", anything else → "1d"
   useEffect(() => {
     api.marketStatus().then(r => {
       const mktStatus = isTW ? r.tw.status : r.us.status;
-      if (mktStatus === "PRE/POST") setPeriod("1d");
+      if (mktStatus !== "OPEN") setPeriod("1d");
     }).catch(() => {}).finally(() => setPeriodReady(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker]);
@@ -143,12 +143,15 @@ export default function StockPage() {
       nonSessionZones.push({ x1: lc, x2: cEnd, label: isSingleDay ? "盤後" : undefined });
   }
 
-  // For intra period, fix x-axis to the full trading session
+  // Fix x-axis domain: intra → session open/close; 1d → rolling 24h ending now
+  const nowMs = Date.now();
   const xDomainStart: number | "dataMin" =
-    period === "intra" && sessionBoundaries.length > 0 ? sessionBoundaries[0].open : "dataMin";
+    period === "intra" && sessionBoundaries.length > 0 ? sessionBoundaries[0].open :
+    period === "1d" ? nowMs - 86_400_000 : "dataMin";
   const xDomainEnd: number | "dataMax" =
     period === "intra" && sessionBoundaries.length > 0 && sessionBoundaries[0].close != null
-      ? sessionBoundaries[0].close : "dataMax";
+      ? sessionBoundaries[0].close :
+    period === "1d" ? nowMs : "dataMax";
 
   return (
     <div style={{ padding: "1rem 2rem", minHeight: "100vh" }}>
