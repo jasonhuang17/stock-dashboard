@@ -70,7 +70,6 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
   }, [groupName]);
 
   const [showSort, setShowSort] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
   const [addInput, setAddInput] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -144,7 +143,6 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
       const res = await api.addGroupTicker(groupName, t);
       onTickersChange(res.tickers);
       setAddInput(""); setSelectedName("");
-      setShowAdd(false);
     } catch (e: unknown) {
       setAddError((e as Error).message);
     }
@@ -196,6 +194,55 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
           </LockTip>
         )}
       </div>
+
+      {/* Add stock row — always visible right below tabs */}
+      {!useMock && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <input
+              className="dash-input"
+              style={{ width: 140 }}
+              placeholder={market === "TW" ? "代號或中文名稱" : "代號或公司名稱"}
+              value={addInput}
+              onChange={e => {
+                const v = e.target.value;
+                setAddInput(v); setSelectedName("");
+                if (market === "TW") searchTw(v); else searchUs(v);
+                setAddError("");
+              }}
+              onKeyDown={e => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Enter") handleAdd();
+                if (e.key === "Escape") setSuggestions([]);
+              }}
+              onBlur={() => setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150)}
+            />
+            {selectedName && (
+              <div style={{ fontSize: "0.7rem", color: "var(--teal)", marginTop: 3, whiteSpace: "nowrap", letterSpacing: "0.02em" }}>
+                {selectedName}
+              </div>
+            )}
+            {suggestions.length > 0 && (
+              <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
+                {suggestions.map((s, i) => (
+                  <div key={s.code}
+                    onMouseDown={() => { setAddInput(s.code); setSelectedName(s.name); setSuggestions([]); setHoveredSugg(-1); }}
+                    onMouseEnter={() => setHoveredSugg(i)}
+                    onMouseLeave={() => setHoveredSugg(-1)}
+                    style={{ padding: "5px 10px", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", fontSize: "0.78rem", background: hoveredSugg === i ? "rgba(30,207,214,0.1)" : "transparent", borderBottom: i < suggestions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                    <span style={{ fontFamily: "Courier New", color: "var(--teal)", minWidth: 58, flexShrink: 0 }}>{s.code}</span>
+                    <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="dash-btn" onClick={handleAdd} disabled={adding}>
+            {adding ? <span className="spinner" /> : "新增"}
+          </button>
+          {addError && <span style={{ color: "var(--red)", fontSize: "0.75rem", alignSelf: "center" }}>{addError}</span>}
+        </div>
+      )}
 
       {/* Stats bar */}
       <GroupStats quotes={quotes} />
@@ -260,11 +307,6 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
           {showSort ? "↕ 收起排序 ▲" : "↕ 調整順序 ▼"}
         </button>
 
-        <button className="dash-btn dash-btn-sm"
-          disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
-          onClick={() => { if (!useMock) { setShowAdd(s => !s); setSuggestions([]); setAddInput(""); setSelectedName(""); } }}>
-          {showAdd ? "✕ 取消" : "+ 新增股票"}
-        </button>
       </div>
 
       {!useMock && showSort && sortMode === "custom" && (
@@ -273,54 +315,6 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
         </div>
       )}
 
-      {!useMock && showAdd && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <input
-              className="dash-input"
-              style={{ width: 140 }}
-              placeholder={market === "TW" ? "代號或中文名稱" : "代號或公司名稱"}
-              value={addInput}
-              onChange={e => {
-                const v = e.target.value;
-                setAddInput(v); setSelectedName("");
-                if (market === "TW") searchTw(v);
-                else searchUs(v);
-                setAddError("");
-              }}
-              onKeyDown={e => {
-                if (e.nativeEvent.isComposing) return;
-                if (e.key === "Enter") handleAdd();
-                if (e.key === "Escape") setSuggestions([]);
-              }}
-              onBlur={() => setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150)}
-            />
-            {selectedName && (
-              <div style={{ fontSize: "0.7rem", color: "var(--teal)", marginTop: 3, whiteSpace: "nowrap", letterSpacing: "0.02em" }}>
-                {selectedName}
-              </div>
-            )}
-            {suggestions.length > 0 && (
-              <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
-                {suggestions.map((s, i) => (
-                  <div key={s.code}
-                    onMouseDown={() => { setAddInput(s.code); setSelectedName(s.name); setSuggestions([]); setHoveredSugg(-1); }}
-                    onMouseEnter={() => setHoveredSugg(i)}
-                    onMouseLeave={() => setHoveredSugg(-1)}
-                    style={{ padding: "5px 10px", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", fontSize: "0.78rem", background: hoveredSugg === i ? "rgba(30,207,214,0.1)" : "transparent", borderBottom: i < suggestions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                    <span style={{ fontFamily: "Courier New", color: "var(--teal)", minWidth: 58, flexShrink: 0 }}>{s.code}</span>
-                    <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <button className="dash-btn" onClick={handleAdd} disabled={adding}>
-            {adding ? <span className="spinner" /> : "新增"}
-          </button>
-          {addError && <span style={{ color: "var(--red)", fontSize: "0.75rem", alignSelf: "center" }}>{addError}</span>}
-        </div>
-      )}
     </div>
   );
 }
