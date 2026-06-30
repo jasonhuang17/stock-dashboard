@@ -22,9 +22,18 @@ from tw_exchange import TW_EXCHANGE
 
 app = FastAPI(title="Stock Dashboard API", version="1.0.0")
 
+def _cors_origins() -> list[str]:
+    origins = ["http://localhost:3000", "http://localhost:3001"]
+    extra = os.environ.get("CORS_ORIGINS", "")
+    for origin in extra.split(","):
+        origin = origin.strip().rstrip("/")
+        if origin and origin not in origins:
+            origins.append(origin)
+    return origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

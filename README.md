@@ -139,14 +139,28 @@ cd ~/Desktop/stock-dashboard
 ./start-js.sh
 ```
 
+`start-js.sh` 會讓 backend/frontend 綁定 `0.0.0.0`，因此同一台機器、區網或 Tailscale 裝置都能連線。若 Mac 已安裝 Tailscale，腳本會自動偵測 Tailscale IP，並設定前端 API URL 與後端 CORS。
+
+從 iPhone / 其他 Tailscale 裝置開啟：
+
+```bash
+http://<Mac 的 Tailscale IP>:3000
+```
+
+也可以手動指定公開給其他裝置使用的 host：
+
+```bash
+PUBLIC_HOST=100.113.111.15 ./start-js.sh
+```
+
 或分開啟動：
 
 ```bash
 # Terminal 1
-cd js/backend && uvicorn main:app --port 8000 --reload
+cd js/backend && CORS_ORIGINS=http://100.113.111.15:3000 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2
-cd js/frontend && npm run dev
+cd js/frontend && NEXT_PUBLIC_API_URL=http://100.113.111.15:8000 npm run dev -- --hostname 0.0.0.0
 ```
 
 瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。
