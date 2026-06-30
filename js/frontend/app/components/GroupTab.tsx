@@ -195,9 +195,9 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
         )}
       </div>
 
-      {/* Add stock row — always visible right below tabs */}
-      {!useMock && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {/* Top controls row: add stock (real mode only) + sort controls */}
+      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {!useMock && (
           <div style={{ position: "relative" }}>
             <input
               className="dash-input"
@@ -237,10 +237,41 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
               </div>
             )}
           </div>
+        )}
+        {!useMock && (
           <button className="dash-btn" onClick={handleAdd} disabled={adding}>
             {adding ? <span className="spinner" /> : "新增"}
           </button>
-          {addError && <span style={{ color: "var(--red)", fontSize: "0.75rem", alignSelf: "center" }}>{addError}</span>}
+        )}
+        {!useMock && addError && <span style={{ color: "var(--red)", fontSize: "0.75rem", alignSelf: "center" }}>{addError}</span>}
+
+        <select
+          className="dash-input"
+          style={{ width: "auto" }}
+          value={sortMode}
+          onChange={e => {
+            const next = e.target.value as typeof sortMode;
+            setSortMode(next);
+            api.setSettings({ group_sorts: { [groupName]: next } }).catch(() => {});
+          }}
+        >
+          <option value="custom">自訂順序</option>
+          <option value="pct_desc">漲幅 ↓</option>
+          <option value="pct_asc">漲幅 ↑</option>
+          <option value="alpha">代號 A→Z</option>
+          <option value="price_desc">價格 ↓</option>
+        </select>
+
+        <button className="dash-btn dash-btn-sm"
+          disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
+          onClick={() => { if (!useMock) setShowSort(s => !s); }}>
+          {showSort ? "↕ 收起排序 ▲" : "↕ 調整順序 ▼"}
+        </button>
+      </div>
+
+      {!useMock && showSort && sortMode === "custom" && (
+        <div style={{ marginTop: 10 }}>
+          <SortableChips items={tickers} onReorder={handleReorder} />
         </div>
       )}
 
@@ -279,39 +310,6 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
               <PremarketCard q={pmMap[t] ?? { ticker: t, price: null, pct: null, prev_close: null, time: null }} />
             </Link>
           ))}
-        </div>
-      )}
-
-      {/* Sort + Add controls */}
-      <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <select
-          className="dash-input"
-          style={{ width: "auto" }}
-          value={sortMode}
-          onChange={e => {
-              const next = e.target.value as typeof sortMode;
-              setSortMode(next);
-              api.setSettings({ group_sorts: { [groupName]: next } }).catch(() => {});
-            }}
-        >
-          <option value="custom">自訂順序</option>
-          <option value="pct_desc">漲幅 ↓</option>
-          <option value="pct_asc">漲幅 ↑</option>
-          <option value="alpha">代號 A→Z</option>
-          <option value="price_desc">價格 ↓</option>
-        </select>
-
-        <button className="dash-btn dash-btn-sm"
-          disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
-          onClick={() => { if (!useMock) setShowSort(s => !s); }}>
-          {showSort ? "↕ 收起排序 ▲" : "↕ 調整順序 ▼"}
-        </button>
-
-      </div>
-
-      {!useMock && showSort && sortMode === "custom" && (
-        <div style={{ marginTop: 10 }}>
-          <SortableChips items={tickers} onReorder={handleReorder} />
         </div>
       )}
 
