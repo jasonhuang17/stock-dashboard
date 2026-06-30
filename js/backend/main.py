@@ -14,7 +14,7 @@ from typing import List, Optional
 import pytz
 import yfinance as yf
 from cachetools import TTLCache
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from tw_names import TW_NAMES
@@ -39,6 +39,45 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_ACCESS_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "access_log.jsonl")
+
+def _client_host(request: Request) -> Optional[str]:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+def _log_access(request: Request, status_code: int, elapsed_ms: float) -> None:
+    entry = {
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "client": _client_host(request),
+        "method": request.method,
+        "path": request.url.path,
+        "query": request.url.query,
+        "status": status_code,
+        "elapsed_ms": round(elapsed_ms, 1),
+        "origin": request.headers.get("origin"),
+        "referer": request.headers.get("referer"),
+        "user_agent": request.headers.get("user-agent"),
+    }
+    try:
+        with _log_lock:
+            with open(_ACCESS_LOG, "a") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        _log_access(request, status_code, (time.perf_counter() - started) * 1000)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "user_data.json")
