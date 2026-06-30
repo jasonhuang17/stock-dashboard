@@ -1563,6 +1563,24 @@ def validate_tw(ticker: str):
     return {"exists": exists, "resolved": resolved}
 
 
+@app.get("/api/tw-search")
+def tw_search(q: str = ""):
+    """Search TW stocks by code prefix or Chinese name substring. Returns up to 8 results."""
+    q = q.strip()
+    if not q:
+        return []
+    q_up = q.upper()
+    exact, prefix, name_match = [], [], []
+    for code, name in TW_NAMES.items():
+        if code == q_up:
+            exact.append({"code": code, "name": name})
+        elif code.startswith(q_up):
+            prefix.append({"code": code, "name": name})
+        elif q in name:
+            name_match.append({"code": code, "name": name})
+    return (exact + prefix + name_match)[:8]
+
+
 _crypto_validate_cache: TTLCache = TTLCache(maxsize=200, ttl=300)
 _crypto_validate_lock = threading.Lock()
 

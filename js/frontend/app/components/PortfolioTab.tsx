@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { api, fmtMoney, fmtPct } from "@/lib/api";
 import type { PortfolioRow, PremarketPortfolioRow, Portfolio, Account, AccountGroup } from "@/lib/types";
 import { twName } from "@/lib/tw-names";
@@ -205,12 +205,25 @@ function ManageTab({
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
   const [tickerStatus, setTickerStatus] = useState<"idle" | "checking" | "ok" | "duplicate" | "notfound">("idle");
+  const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
+  const [hoveredSugg, setHoveredSugg] = useState(-1);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggClickedRef = useRef(false);
 
   const [editTicker, setEditTicker] = useState<string | null>(null);
   const [editShares, setEditShares] = useState("");
   const [editTotalCost, setEditTotalCost] = useState("");
 
   const [showSort, setShowSort] = useState(false);
+
+  function searchTw(q: string) {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!q.trim()) { setSuggestions([]); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try { setSuggestions(await api.twSearch(q.trim())); }
+      catch { setSuggestions([]); }
+    }, 200);
+  }
 
   async function handleTickerBlur() {
     const t = ticker.trim().toUpperCase();
@@ -239,7 +252,7 @@ function ManageTab({
         if (!exists) { setErr(`找不到代號 ${t}`); setAdding(false); return; }
       }
       await api.addPosition(account, t, sh, tc / sh, tc);
-      setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle");
+      setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle"); setSuggestions([]);
       onRefresh();
     } catch (e: unknown) {
       const msg = (e as Error).message;
@@ -291,11 +304,35 @@ function ManageTab({
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div>
               <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>代號</div>
-              <input className="dash-input" style={{ width: 100 }} placeholder={currency === "TWD" ? "2330" : "AAPL"}
-                value={ticker}
-                onChange={e => { setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, "")); setTickerStatus("idle"); setErr(""); }}
-                onBlur={handleTickerBlur}
-                onKeyDown={e => e.key === "Enter" && handleAdd()} />
+              <div style={{ position: "relative" }}>
+                <input className="dash-input" style={{ width: 120 }} placeholder={currency === "TWD" ? "代號或中文名稱" : "AAPL"}
+                  value={ticker}
+                  onChange={e => {
+                    const v = currency === "TWD" ? e.target.value : e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+                    setTicker(v); setTickerStatus("idle"); setErr("");
+                    if (currency === "TWD") searchTw(v); else setSuggestions([]);
+                  }}
+                  onBlur={() => { setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150); if (!suggClickedRef.current) handleTickerBlur(); suggClickedRef.current = false; }}
+                  onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setSuggestions([]); }} />
+                {suggestions.length > 0 && (
+                  <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
+                    {suggestions.map((s, i) => (
+                      <div key={s.code}
+                        onMouseDown={() => {
+                          suggClickedRef.current = true;
+                          setTicker(s.code); setSuggestions([]); setHoveredSugg(-1); setTickerStatus("checking");
+                          api.validateTW(s.code).then(({ exists }) => setTickerStatus(exists ? "ok" : "notfound")).catch(() => setTickerStatus("idle"));
+                        }}
+                        onMouseEnter={() => setHoveredSugg(i)}
+                        onMouseLeave={() => setHoveredSugg(-1)}
+                        style={{ padding: "5px 10px", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", fontSize: "0.78rem", background: hoveredSugg === i ? "rgba(30,207,214,0.1)" : "transparent", borderBottom: i < suggestions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        <span style={{ fontFamily: "Courier New", color: "var(--teal)", minWidth: 58, flexShrink: 0 }}>{s.code}</span>
+                        <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: "0.65rem", color: "var(--dim)", marginBottom: 3 }}>股數</div>

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Quote, PremarketQuote, Market } from "@/lib/types";
@@ -74,6 +74,9 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
   const [addInput, setAddInput] = useState("");
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
+  const [hoveredSugg, setHoveredSugg] = useState(-1);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use join() as the dependency so a new array reference with the same content
   // (caused by the parent's countdown re-render) doesn't trigger a new fetch.
@@ -105,11 +108,21 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
     return order;
   }
 
+  function searchTw(q: string) {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!q.trim()) { setSuggestions([]); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try { setSuggestions(await api.twSearch(q.trim())); }
+      catch { setSuggestions([]); }
+    }, 200);
+  }
+
   async function handleAdd() {
     const t = addInput.trim().toUpperCase();
     if (!t) { setAddError("請輸入代號"); return; }
     setAdding(true);
     setAddError("");
+    setSuggestions([]);
     try {
       if (market === "TW") {
         const { exists } = await api.validateTW(t);
@@ -239,7 +252,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
 
         <button className="dash-btn dash-btn-sm"
           disabled={useMock} title={useMock ? "exit demo to edit" : undefined}
-          onClick={() => { if (!useMock) setShowAdd(s => !s); }}>
+          onClick={() => { if (!useMock) { setShowAdd(s => !s); setSuggestions([]); setAddInput(""); } }}>
           {showAdd ? "✕ 取消" : "+ 新增股票"}
         </button>
       </div>
@@ -252,14 +265,36 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
 
       {!useMock && showAdd && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <input
-            className="dash-input"
-            style={{ width: 120 }}
-            placeholder={market === "TW" ? "代號 (e.g. 2330)" : "代號 (e.g. NVDA)"}
-            value={addInput}
-            onChange={e => setAddInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && handleAdd()}
-          />
+          <div style={{ position: "relative" }}>
+            <input
+              className="dash-input"
+              style={{ width: 140 }}
+              placeholder={market === "TW" ? "代號或中文名稱" : "代號 (e.g. NVDA)"}
+              value={addInput}
+              onChange={e => {
+                const v = market === "TW" ? e.target.value : e.target.value.toUpperCase();
+                setAddInput(v);
+                if (market === "TW") searchTw(v); else setSuggestions([]);
+                setAddError("");
+              }}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setSuggestions([]); }}
+              onBlur={() => setTimeout(() => { setSuggestions([]); setHoveredSugg(-1); }, 150)}
+            />
+            {suggestions.length > 0 && (
+              <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, zIndex: 200, background: "#001828", border: "1px solid rgba(30,207,214,0.35)", borderRadius: 4, minWidth: 210, maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,0.55)" }}>
+                {suggestions.map((s, i) => (
+                  <div key={s.code}
+                    onMouseDown={() => { setAddInput(s.code); setSuggestions([]); setHoveredSugg(-1); }}
+                    onMouseEnter={() => setHoveredSugg(i)}
+                    onMouseLeave={() => setHoveredSugg(-1)}
+                    style={{ padding: "5px 10px", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", fontSize: "0.78rem", background: hoveredSugg === i ? "rgba(30,207,214,0.1)" : "transparent", borderBottom: i < suggestions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                    <span style={{ fontFamily: "Courier New", color: "var(--teal)", minWidth: 58, flexShrink: 0 }}>{s.code}</span>
+                    <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button className="dash-btn" onClick={handleAdd} disabled={adding}>
             {adding ? <span className="spinner" /> : "新增"}
           </button>
