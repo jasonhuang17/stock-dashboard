@@ -150,17 +150,17 @@ http://<Mac 的 Tailscale IP>:3000
 也可以手動指定公開給其他裝置使用的 host：
 
 ```bash
-PUBLIC_HOST=100.113.111.15 ./start-js.sh
+PUBLIC_HOST=<Mac 的 Tailscale IP> ./start-js.sh
 ```
 
 或分開啟動：
 
 ```bash
 # Terminal 1
-cd js/backend && CORS_ORIGINS=http://100.113.111.15:3000 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd js/backend && CORS_ORIGINS=http://<Mac 的 Tailscale IP>:3000 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2
-cd js/frontend && NEXT_PUBLIC_API_URL=http://100.113.111.15:8000 npm run dev -- --hostname 0.0.0.0
+cd js/frontend && NEXT_PUBLIC_API_URL=http://<Mac 的 Tailscale IP>:8000 npm run dev -- --hostname 0.0.0.0
 ```
 
 瀏覽器開啟 `http://localhost:3000`（frontend）或 `http://localhost:8000/docs`（API 文件）。

@@ -34,6 +34,7 @@ def _cors_origins() -> list[str]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+):3000$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -14,8 +14,16 @@ fi
 
 API_HOST="${API_HOST:-${PUBLIC_HOST:-localhost}}"
 FRONTEND_HOST="${FRONTEND_HOST:-${PUBLIC_HOST:-localhost}}"
+export PUBLIC_HOST
+export API_HOST
+export FRONTEND_HOST
 export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://${API_HOST}:8000}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://${FRONTEND_HOST}:3000}"
+
+if [ -z "$PUBLIC_HOST" ]; then
+  echo "Warning: PUBLIC_HOST is empty; remote devices may not load API data."
+  echo "         Use PUBLIC_HOST=100.x.y.z ./start-js.sh for Tailscale/iPhone access."
+fi
 
 # Backend
 echo "Starting FastAPI backend on ${HOST}:8000..."

@@ -87,18 +87,31 @@ export default function Dashboard() {
   const renameEscRef  = useRef(false);  // true when Escape was pressed, suppresses onBlur rename
 
   const loadMeta = useCallback(async () => {
-    try {
-      const [gr, s, settings] = await Promise.all([api.groups(), api.marketStatus(), api.getSettings()]);
+    const [groupsResult, statusResult, settingsResult] = await Promise.allSettled([
+      api.groups(),
+      api.marketStatus(),
+      api.getSettings(),
+    ]);
+
+    if (groupsResult.status === "fulfilled") {
+      const gr = groupsResult.value;
       setGroups(gr.groups);
       setPinned(gr.pinned);
       setMarkets(gr.markets ?? {});
-      setStatus(s);
+    }
+
+    if (statusResult.status === "fulfilled") {
+      setStatus(statusResult.value);
+    }
+
+    if (settingsResult.status === "fulfilled") {
+      const settings = settingsResult.value;
       setUseMock(settings.use_mock);
       if (settings.theme) {
         const t = colorThemes.find(c => c.id === settings.theme);
         if (t) applyTheme(t);
       }
-    } catch { /* silent */ }
+    }
     setSettingsLoaded(true);
   }, []);
 
