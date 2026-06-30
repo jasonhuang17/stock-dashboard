@@ -6,6 +6,7 @@ import concurrent.futures
 import json
 import os
 import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, time as dtime, timedelta
@@ -1582,20 +1583,94 @@ def tw_search(q: str = ""):
     return (exact + prefix + name_match)[:8]
 
 
-_us_search_cache: TTLCache = TTLCache(maxsize=500, ttl=120)
-_us_search_lock = threading.Lock()
+# ── US stock name mapping (SEC EDGAR, refreshed daily) ───────────────────────
+US_NAMES_FILE = os.path.join(os.path.dirname(__file__), "us_names.json")
+_us_names: dict = {}       # { "AAPL": "Apple Inc.", ... } ~12K entries
+_us_names_lock = threading.Lock()
+
+# Fallback TTL cache for Yahoo Finance API (used only before local data is ready)
+_us_search_fallback_cache: TTLCache = TTLCache(maxsize=200, ttl=120)
+_us_search_fallback_lock = threading.Lock()
+
+
+def _load_us_names() -> None:
+    global _us_names
+    try:
+        with open(US_NAMES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        with _us_names_lock:
+            _us_names = data
+        print(f"[us_names] loaded {len(data)} entries")
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+
+
+def _refresh_us_names() -> None:
+    """Download ticker→company mapping from SEC EDGAR and persist to us_names.json."""
+    try:
+        url = "https://www.sec.gov/files/company_tickers.json"
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "stock-dashboard/1.0 (personal-use)"}
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = json.loads(resp.read())
+        mapping: dict = {}
+        for item in raw.values():
+            ticker = str(item.get("ticker", "")).upper().strip()
+            title  = str(item.get("title",  "")).strip()
+            # Skip entries with spaces (warrants, units) or empty fields
+            if ticker and title and " " not in ticker:
+                mapping[ticker] = title
+        with _us_names_lock:
+            _us_names.clear()
+            _us_names.update(mapping)
+        with open(US_NAMES_FILE, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"[us_names] refreshed {len(mapping)} entries → {US_NAMES_FILE}")
+    except Exception as e:
+        print(f"[us_names] refresh failed: {e}")
+
+
+def _us_names_daily_refresh() -> None:
+    _refresh_us_names()
+    while True:
+        time.sleep(86400)   # wait 24 h then refresh again
+        _refresh_us_names()
+
+
+# Load from existing file immediately; background thread refreshes from SEC EDGAR
+_load_us_names()
+threading.Thread(target=_us_names_daily_refresh, daemon=True).start()
 
 
 @app.get("/api/us-search")
 def us_search(q: str = ""):
-    """Search US stocks/ETFs by ticker or company name via Yahoo Finance suggest API."""
+    """Search US stocks/ETFs by ticker prefix or company name substring."""
     q = q.strip()
     if not q:
         return []
+
+    with _us_names_lock:
+        snap = dict(_us_names)   # snapshot; ~12K entries, copy takes <1 ms
+
+    if snap:
+        q_up = q.upper()
+        q_lo = q.lower()
+        exact, prefix, name_match = [], [], []
+        for code, name in snap.items():
+            if code == q_up:
+                exact.append({"code": code, "name": name})
+            elif code.startswith(q_up):
+                prefix.append({"code": code, "name": name})
+            elif q_lo in name.lower():
+                name_match.append({"code": code, "name": name})
+        return (exact + prefix + name_match)[:8]
+
+    # Fallback to Yahoo Finance API (only while local data is still downloading)
     key = q.lower()
-    with _us_search_lock:
-        if key in _us_search_cache:
-            return _us_search_cache[key]
+    with _us_search_fallback_lock:
+        if key in _us_search_fallback_cache:
+            return _us_search_fallback_cache[key]
     try:
         url = (
             "https://query1.finance.yahoo.com/v1/finance/search"
@@ -1611,8 +1686,8 @@ def us_search(q: str = ""):
         ][:8]
     except Exception:
         results = []
-    with _us_search_lock:
-        _us_search_cache[key] = results
+    with _us_search_fallback_lock:
+        _us_search_fallback_cache[key] = results
     return results
 
 
