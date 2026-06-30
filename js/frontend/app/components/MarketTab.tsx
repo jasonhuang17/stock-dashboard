@@ -24,11 +24,11 @@ function sortStocks(stocks: Stock[], sort: Sort): Stock[] {
   });
 }
 
-function StockRow({ s }: { s: Stock }) {
+function StockRow({ s, market }: { s: Stock; market: "US" | "TW" }) {
   return (
     <tr>
       <td style={{ textAlign: "left" }}>
-        <Link href={`/stock/${encodeURIComponent(s.ticker)}`}
+        <Link href={`/stock/${encodeURIComponent(s.ticker)}?market=${market}`}
           style={{ color: "var(--teal)", fontWeight: 700, textDecoration: "none", fontFamily: "Courier New" }}>
           {s.ticker}
         </Link>
@@ -66,14 +66,14 @@ export function MarketTab({ refreshKey }: { refreshKey: number }) {
     { key: "volume_desc", label: "成交量↓" },
   ];
 
-  const miniTable = (label: string, rows: Stock[]) => (
+  const miniTable = (label: string, rows: Stock[], market: "US" | "TW") => (
     <div style={{ flex: "1 1 280px", minWidth: 240 }}>
       <div style={{ color: "var(--gold)", fontFamily: "Courier New", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8, borderLeft: "3px solid rgba(237,209,112,0.4)", paddingLeft: 8 }}>
         {label}
       </div>
       <table className="pnl-table" style={{ width: "100%" }}>
         <thead><tr><th style={{ textAlign: "left" }}>代號</th><th>現價</th><th>漲跌%</th><th>成交量</th></tr></thead>
-        <tbody>{rows.map(s => <StockRow key={s.ticker} s={s} />)}</tbody>
+        <tbody>{rows.map(s => <StockRow key={s.ticker} s={s} market={market} />)}</tbody>
       </table>
     </div>
   );
@@ -108,17 +108,17 @@ export function MarketTab({ refreshKey }: { refreshKey: number }) {
       {marketTab === "us" ? (
         /* US: screener-based 3 categories */
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {miniTable("漲幅排行", usData.gainers)}
-          {miniTable("跌幅排行", usData.losers)}
-          {miniTable("成交量排行", usData.actives)}
+          {miniTable("漲幅排行", usData.gainers, "US")}
+          {miniTable("跌幅排行", usData.losers, "US")}
+          {miniTable("成交量排行", usData.actives, "US")}
         </div>
       ) : (
         /* TW: mini summary + full sorted table */
         <>
           <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-            {miniTable("漲幅排行", sortStocks(twStocks, "pct_desc").slice(0, 5))}
-            {miniTable("跌幅排行", sortStocks(twStocks, "pct_asc").slice(0, 5))}
-            {miniTable("成交量排行", sortStocks(twStocks, "volume_desc").slice(0, 5))}
+            {miniTable("漲幅排行", sortStocks(twStocks, "pct_desc").slice(0, 5), "TW")}
+            {miniTable("跌幅排行", sortStocks(twStocks, "pct_asc").slice(0, 5), "TW")}
+            {miniTable("成交量排行", sortStocks(twStocks, "volume_desc").slice(0, 5), "TW")}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table className="pnl-table" style={{ minWidth: 420 }}>
@@ -131,7 +131,7 @@ export function MarketTab({ refreshKey }: { refreshKey: number }) {
                 </tr>
               </thead>
               <tbody>
-                {sortStocks(twStocks, sort).map(s => <StockRow key={s.ticker} s={s} />)}
+                {sortStocks(twStocks, sort).map(s => <StockRow key={s.ticker} s={s} market="TW" />)}
               </tbody>
             </table>
           </div>

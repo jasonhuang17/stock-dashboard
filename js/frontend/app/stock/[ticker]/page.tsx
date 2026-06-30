@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -48,8 +48,10 @@ function fmtDateFull(t: number, interval: string): string {
 
 export default function StockPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const ticker = (params?.ticker as string ?? "").toUpperCase();
-  const isTW = /^\d{4,}[A-Za-z]?$/.test(ticker);
+  const marketParam = searchParams?.get("market");
+  const isTW = marketParam === "TW" ? true : marketParam === "US" ? false : /^\d{4,}[A-Za-z]?$/.test(ticker);
 
   const [period, setPeriod] = useState<Period>("intra");
   const [periodReady, setPeriodReady] = useState(false);

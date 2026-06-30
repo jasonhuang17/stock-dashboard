@@ -283,7 +283,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
           {displayQuotes.map(q => (
             <div key={q.ticker} style={{ position: "relative" }}>
-              <Link href={`/stock/${encodeURIComponent(q.ticker)}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+              <Link href={`/stock/${encodeURIComponent(q.ticker)}?market=${market}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
                 <StockCard q={q} />
               </Link>
               {!useMock && (
@@ -306,7 +306,7 @@ export function GroupTab({ groupName, tickers, market, refreshKey, useMock, isPi
       {subTab === "premarket" && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
           {tickers.map(t => (
-            <Link key={t} href={`/stock/${encodeURIComponent(t)}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+            <Link key={t} href={`/stock/${encodeURIComponent(t)}?market=${market}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
               <PremarketCard q={pmMap[t] ?? { ticker: t, price: null, pct: null, prev_close: null, time: null }} />
             </Link>
           ))}
