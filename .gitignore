@@ -9,6 +9,8 @@ js/backend/portfolio_log.jsonl
 js/backend/user_data_log.jsonl
 js/backend/access_log.jsonl
 js/backend/us_names.json
+js/backend/users.json
+js/user_data_*.json
 DEV_LOG.md
 docs/
 AGENTS.md

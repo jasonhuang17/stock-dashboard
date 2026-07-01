@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from contextvars import ContextVar
 from datetime import datetime, time as dtime, timedelta
 from typing import List, Optional
 import pytz
@@ -69,20 +70,56 @@ def _log_access(request: Request, status_code: int, elapsed_ms: float) -> None:
     except Exception:
         pass
 
+# ── Multi-user: IP → username mapping ────────────────────────────────────────
+_USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
+
+def _load_users() -> dict:
+    try:
+        with open(_USERS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+_USERS: dict = _load_users()
+_current_user: ContextVar[str] = ContextVar("current_user", default="default")
+
 @app.middleware("http")
 async def access_log_middleware(request: Request, call_next):
     started = time.perf_counter()
+    ip = _client_host(request)
+    username = _USERS.get(ip or "", "default")
+    token = _current_user.set(username)
     status_code = 500
     try:
         response = await call_next(request)
         status_code = response.status_code
         return response
     finally:
+        _current_user.reset(token)
         _log_access(request, status_code, (time.perf_counter() - started) * 1000)
 
 # ── Config ────────────────────────────────────────────────────────────────────
+_DATA_DIR   = os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "user_data.json")))
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "user_data.json")
 DEMO_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_data.json")
+
+def _user_config_file() -> str:
+    """Return the per-user data file path based on the current request context."""
+    username = _current_user.get()
+    if username == "default":
+        return CONFIG_FILE
+    return os.path.join(os.path.dirname(CONFIG_FILE), f"user_data_{username}.json")
+
+# Per-user file locks — prevents concurrent writes within one user's session.
+_config_locks: dict = {}
+_config_locks_meta = threading.Lock()
+
+def _get_config_lock() -> threading.Lock:
+    username = _current_user.get()
+    with _config_locks_meta:
+        if username not in _config_locks:
+            _config_locks[username] = threading.Lock()
+        return _config_locks[username]
 
 _DEFAULT_GROUPS = {
     "⚡ 個股": ["AAOI", "ONDS", "MU", "SNDK", "SPCX", "TSLA", "NVDA", "TSM", "AAPL", "GOOG", "AMZN"],
@@ -229,13 +266,14 @@ def run_migrations(data: dict) -> tuple[dict, bool]:
 
 
 def load_config() -> tuple[dict, dict, list, dict]:
+    cf = _user_config_file()
     try:
-        with open(CONFIG_FILE, "r") as f:
+        with open(cf, "r") as f:
             data = json.load(f)
         data, changed = run_migrations(data)
         if changed:
-            with _config_lock:
-                with open(CONFIG_FILE, "w") as f:
+            with _get_config_lock():
+                with open(cf, "w") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
         raw = data.get("group_tickers", {})
         raw_portfolio = data.get("portfolio", {})
@@ -254,9 +292,10 @@ def load_config() -> tuple[dict, dict, list, dict]:
 
 
 def save_config(group_tickers: dict, portfolio: dict, pinned: Optional[list] = None, markets: Optional[dict] = None) -> None:
-    with _config_lock:
+    cf = _user_config_file()
+    with _get_config_lock():
         try:
-            with open(CONFIG_FILE, "r") as f:
+            with open(cf, "r") as f:
                 existing = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             existing = {}
@@ -266,13 +305,13 @@ def save_config(group_tickers: dict, portfolio: dict, pinned: Optional[list] = N
             existing["pinned_groups"] = pinned
         if markets is not None:
             existing["group_markets"] = markets
-        with open(CONFIG_FILE, "w") as f:
+        with open(cf, "w") as f:
             json.dump(existing, f, ensure_ascii=False, indent=2)
 
 
 def load_settings() -> dict:
     try:
-        with open(CONFIG_FILE, "r") as f:
+        with open(_user_config_file(), "r") as f:
             data = json.load(f)
         s = data.get("settings", {})
     except (FileNotFoundError, json.JSONDecodeError):
@@ -287,14 +326,15 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict) -> None:
-    with _config_lock:
+    cf = _user_config_file()
+    with _get_config_lock():
         try:
-            with open(CONFIG_FILE, "r") as f:
+            with open(cf, "r") as f:
                 existing = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             existing = {}
         existing["settings"] = settings
-        with open(CONFIG_FILE, "w") as f:
+        with open(cf, "w") as f:
             json.dump(existing, f, ensure_ascii=False, indent=2)
 
 
@@ -975,9 +1015,10 @@ def put_settings(body: SettingsBody):
     # Hold the lock for the entire read-modify-write cycle to prevent concurrent
     # requests from overwriting each other's changes with stale data.
     clear_crypto = False
-    with _config_lock:
+    cf = _user_config_file()
+    with _get_config_lock():
         try:
-            with open(CONFIG_FILE, "r") as f:
+            with open(cf, "r") as f:
                 file_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             file_data = {}
@@ -1025,7 +1066,7 @@ def put_settings(body: SettingsBody):
             s["account_groups"] = groups
         _log_settings_change(s_before, s)
         file_data["settings"] = s
-        with open(CONFIG_FILE, "w") as f:
+        with open(cf, "w") as f:
             json.dump(file_data, f, ensure_ascii=False, indent=2)
     if clear_crypto:
         with _crypto_cache_lock:
