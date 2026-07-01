@@ -139,14 +139,15 @@ export default function Dashboard() {
 
   async function handleToggleMock() {
     const next = !useMock;
-    setUseMock(next);
-    await api.setSettings({ use_mock: next });
-    // Trigger children to re-fetch immediately, then reload group tabs in parallel
-    setRefreshKey(k => k + 1);
-    const gr = await api.groups();
-    setGroups(gr.groups);
-    setPinned(gr.pinned);
-    setMarkets(gr.markets ?? {});
+    try {
+      const settings = await api.setSettings({ use_mock: next });
+      const gr = await api.groups();
+      setUseMock(settings.use_mock);
+      setGroups(gr.groups);
+      setPinned(gr.pinned);
+      setMarkets(gr.markets ?? {});
+      setRefreshKey(k => k + 1);
+    } catch { /* keep current mode if the backend toggle fails */ }
   }
 
   async function handleCreateGroup() {
@@ -232,6 +233,7 @@ export default function Dashboard() {
   const marketTabIdx = groupNames.length + 1;
   const cryptoTabIdx = groupNames.length + 2;
   const tabs = ["💼 持倉", ...groupNames, ...FIXED_TABS_END];
+  const dataModeKey = useMock ? "demo" : "real";
 
   useEffect(() => {
     const saved = parseInt(sessionStorage.getItem("dashboard-tab") ?? "0", 10) || 0;
@@ -378,11 +380,11 @@ export default function Dashboard() {
       </div>
 
       {/* Tab content — gated on settingsLoaded to prevent useMock=false flash on page refresh */}
-      {settingsLoaded && tab === 0 && <PortfolioTab refreshKey={refreshKey} useMock={useMock} />}
+      {settingsLoaded && tab === 0 && <PortfolioTab key={`portfolio-${dataModeKey}`} refreshKey={refreshKey} useMock={useMock} />}
       {settingsLoaded && groupNames.map((g, i) => (
         tab === i + 1 && (
           <GroupTab
-            key={g}
+            key={`${dataModeKey}-${g}`}
             groupName={g}
             tickers={groups[g] ?? []}
             market={markets[g] ?? "US"}
