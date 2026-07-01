@@ -15,6 +15,63 @@ import { CSS } from "@dnd-kit/utilities";
 
 type Currency = "USD" | "TWD";
 
+const ACCOUNT_ROWS_CACHE_TTL_MS = 30_000;
+const accountRowsCache = new Map<string, { rows: PortfolioRow[]; fetchedAt: number }>();
+const accountPremarketCache = new Map<string, { rows: PremarketPortfolioRow[]; fetchedAt: number }>();
+const accountRowsInFlight = new Map<string, Promise<PortfolioRow[]>>();
+const accountPremarketInFlight = new Map<string, Promise<PremarketPortfolioRow[]>>();
+
+function getFreshCache<T>(cache: Map<string, { rows: T[]; fetchedAt: number }>, key: string) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.fetchedAt > ACCOUNT_ROWS_CACHE_TTL_MS) return null;
+  return cached.rows;
+}
+
+function clearAccountRowsCache(account?: string) {
+  if (!account) {
+    accountRowsCache.clear();
+    accountPremarketCache.clear();
+    return;
+  }
+  accountRowsCache.delete(account);
+  accountPremarketCache.delete(account);
+}
+
+function fetchAccountRows(account: string, force = false) {
+  const cached = getFreshCache(accountRowsCache, account);
+  if (cached && !force) return Promise.resolve(cached);
+
+  const pending = accountRowsInFlight.get(account);
+  if (pending) return pending;
+
+  const request = api.portfolioRows(account)
+    .then(rows => {
+      accountRowsCache.set(account, { rows, fetchedAt: Date.now() });
+      return rows;
+    })
+    .finally(() => { accountRowsInFlight.delete(account); });
+  accountRowsInFlight.set(account, request);
+  return request;
+}
+
+function fetchAccountPremarketRows(account: string, force = false) {
+  const cached = getFreshCache(accountPremarketCache, account);
+  if (cached && !force) return Promise.resolve(cached);
+
+  const pending = accountPremarketInFlight.get(account);
+  if (pending) return pending;
+
+  const request = api.portfolioPremarketRows(account)
+    .then(rows => {
+      accountPremarketCache.set(account, { rows, fetchedAt: Date.now() });
+      return rows;
+    })
+    .finally(() => { accountPremarketInFlight.delete(account); });
+  accountPremarketInFlight.set(account, request);
+  return request;
+}
+
 function LockTip({ text, children }: { text: string; children: ReactNode }) {
   const [hovered, setHovered] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -51,30 +108,50 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAH, setShowAH] = useState(false);
+  const lastFetchRef = useRef<{ account: string; refreshKey: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function run() {
-      setRefreshing(true);
-      try {
-        const [r, ah] = await Promise.all([
-          api.portfolioRows(account),
-          api.portfolioPremarketRows(account),
-        ]);
+    const lastFetch = lastFetchRef.current;
+    const forceRefresh = lastFetch?.account === account && lastFetch.refreshKey !== refreshKey;
+    lastFetchRef.current = { account, refreshKey };
+
+    const cachedRows = getFreshCache(accountRowsCache, account);
+    const cachedAhRows = getFreshCache(accountPremarketCache, account);
+    if (cachedRows) {
+      setRows(cachedRows);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    if (cachedAhRows) setAhRows(cachedAhRows);
+    setRefreshing(true);
+
+    fetchAccountRows(account, forceRefresh)
+      .then(r => {
         if (cancelled) return;
         setRows(r);
-        setAhRows(ah);
-      } catch {
+        setLoading(false);
+      })
+      .catch(() => {
         if (cancelled) return;
         setRows([]);
-        setAhRows([]);
-      }
-      if (!cancelled) {
         setLoading(false);
-        setRefreshing(false);
-      }
-    }
-    run();
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
+      });
+
+    fetchAccountPremarketRows(account, forceRefresh)
+      .then(ah => {
+        if (cancelled) return;
+        setAhRows(ah);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAhRows([]);
+      });
+
     return () => { cancelled = true; };
   }, [account, refreshKey]);
 
@@ -272,6 +349,7 @@ function ManageTab({
       }
       await api.addPosition(account, t, sh, tc / sh, tc);
       setTicker(""); setShares(""); setTotalCost(""); setTickerStatus("idle"); setSuggestions([]); setSelectedName("");
+      clearAccountRowsCache(account);
       onRefresh();
     } catch (e: unknown) {
       const msg = (e as Error).message;
@@ -282,17 +360,17 @@ function ManageTab({
 
   async function handleDelete(t: string) {
     if (!confirm(`確認刪除 ${t}？`)) return;
-    try { await api.deletePosition(account, t); onRefresh(); } catch { /* silent */ }
+    try { await api.deletePosition(account, t); clearAccountRowsCache(account); onRefresh(); } catch { /* silent */ }
   }
 
   async function handleEdit(t: string) {
     const sh = parseFloat(editShares), tc = parseFloat(editTotalCost);
     if (isNaN(sh) || isNaN(tc) || sh <= 0 || tc < 0) return;
-    try { await api.updatePosition(account, t, sh, tc / sh, tc); setEditTicker(null); onRefresh(); } catch { /* silent */ }
+    try { await api.updatePosition(account, t, sh, tc / sh, tc); setEditTicker(null); clearAccountRowsCache(account); onRefresh(); } catch { /* silent */ }
   }
 
   async function handleReorder(newOrder: string[]) {
-    try { await api.reorderPortfolio(account, newOrder); onRefresh(); } catch { /* silent */ }
+    try { await api.reorderPortfolio(account, newOrder); clearAccountRowsCache(account); onRefresh(); } catch { /* silent */ }
   }
 
   const sym = currency === "TWD" ? "NT$" : "USD";
@@ -629,7 +707,7 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all(accounts.map(a => api.portfolioRows(a.key).catch(() => [] as PortfolioRow[])))
+    Promise.all(accounts.map(a => fetchAccountRows(a.key, true).catch(() => [] as PortfolioRow[])))
       .then(results => {
         if (cancelled) return;
         const map: Record<string, PortfolioRow[]> = {};

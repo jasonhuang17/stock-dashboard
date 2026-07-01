@@ -335,6 +335,8 @@ _tw_resolve_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
 _tw_name_cache: dict = {}  # permanent — ticker names don't change
 _ytd_cache: TTLCache = TTLCache(maxsize=500, ttl=86400)   # 24h — year-start price
 _52w_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)    # 1h — 52-week high/low (background-populated)
+_portfolio_rows_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
+_portfolio_rows_inflight: dict[str, threading.Event] = {}
 _cache_lock = threading.Lock()
 # Limits concurrent yf.download calls to 1 to prevent Yahoo Finance rate-limiting
 # when all portfolio accounts load simultaneously on fresh backend start.
@@ -391,6 +393,51 @@ def _log_quotes(kind: str, rows: list[dict], n_fetched: int = 0) -> None:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
         pass
+
+
+def _portfolio_rows_cache_key(account: str) -> str:
+    settings = load_settings()
+    portfolio = active_portfolio()
+    acct = portfolio.get(account, {})
+    signature = json.dumps({
+        "mock": bool(settings.get("use_mock")),
+        "currency": acct.get("currency"),
+        "positions": acct.get("positions", {}),
+    }, ensure_ascii=False, sort_keys=True)
+    return f"{account}:{signature}"
+
+
+def _cached_portfolio_rows(account: str) -> list[dict]:
+    cache_key = _portfolio_rows_cache_key(account)
+    should_compute = False
+    with _cache_lock:
+        cached = _portfolio_rows_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        event = _portfolio_rows_inflight.get(cache_key)
+        if event is None:
+            event = threading.Event()
+            _portfolio_rows_inflight[cache_key] = event
+            should_compute = True
+
+    if not should_compute:
+        event.wait(timeout=90)
+        with _cache_lock:
+            cached = _portfolio_rows_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        return []
+
+    try:
+        rows = _portfolio_rows(account)
+        with _cache_lock:
+            _portfolio_rows_cache[cache_key] = rows
+        return rows
+    finally:
+        with _cache_lock:
+            done = _portfolio_rows_inflight.pop(cache_key, None)
+            if done:
+                done.set()
 
 
 # ── Market status ─────────────────────────────────────────────────────────────
@@ -1194,7 +1241,7 @@ def get_portfolio():
 @app.get("/api/portfolio/{account}/rows")
 def get_rows(account: str):
     try:
-        return _portfolio_rows(account)
+        return _cached_portfolio_rows(account)
     except Exception:
         return []
 
