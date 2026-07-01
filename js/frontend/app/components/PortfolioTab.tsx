@@ -947,6 +947,11 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
       const p = await api.portfolio();
       setPortfolio(p);
       setAllAccountKeys(Object.keys(p));
+      setAcctTab(prev => {
+        const next = prev > Object.keys(p).length ? 0 : prev;
+        if (next !== prev) sessionStorage.setItem("portfolio-acct-tab", "0");
+        return next;
+      });
     } catch { /* silent */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
@@ -1025,6 +1030,9 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
     api.reorderAccounts(newOrder).catch(() => loadPortfolio());
   }
 
+  const activeAcct = acctTab > 0 ? ACCOUNTS[acctTab - 1] : null;
+  const activeAcctProtected = activeAcct ? protectedAccounts.has(activeAcct.key) : false;
+
   return (
     <div>
       {/* Account tabs */}
@@ -1092,46 +1100,42 @@ export function PortfolioTab({ refreshKey, useMock }: { refreshKey: number; useM
 
       {acctTab === 0 && <OverallTab portfolio={portfolio} refreshKey={refreshKey} useMock={useMock} />}
 
-      {ACCOUNTS.map((acct, i) => {
-        const isActive = acctTab === i + 1;
-        const isProtected = protectedAccounts.has(acct.key);
-        return (
-          <div key={acct.key} style={isActive ? {} : { visibility: "hidden", height: 0, overflow: "hidden" }}>
-            <div className="tab-bar" style={{ alignItems: "center" }}>
-              {["💰 今日損益", "📝 持倉管理"].map((t, ti) => (
-                <button key={t} className={`tab-btn${pnlTab === ti ? " active" : ""}`} onClick={() => {
-                    setPnlTab(ti);
-                    sessionStorage.setItem(`portfolio-pnl-tab-${i + 1}`, String(ti));
-                  }}>
-                  {t}
+      {activeAcct && (
+        <div key={activeAcct.key}>
+          <div className="tab-bar" style={{ alignItems: "center" }}>
+            {["💰 今日損益", "📝 持倉管理"].map((t, ti) => (
+              <button key={t} className={`tab-btn${pnlTab === ti ? " active" : ""}`} onClick={() => {
+                  setPnlTab(ti);
+                  sessionStorage.setItem(`portfolio-pnl-tab-${acctTab}`, String(ti));
+                }}>
+                {t}
+              </button>
+            ))}
+            {!useMock && (
+              <LockTip text={activeAcctProtected ? "已鎖定：無法刪除此帳戶（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}>
+                <button onClick={() => toggleProtect(activeAcct.key)}
+                  style={{ background: "none", border: "none", cursor: "pointer",
+                    fontSize: "0.78rem", padding: "0 4px", opacity: activeAcctProtected ? 1 : 0.35,
+                    color: activeAcctProtected ? "var(--teal)" : "var(--dim)" }}>
+                  {activeAcctProtected ? "🔒" : "🔓"}
                 </button>
-              ))}
-              {!useMock && (
-                <LockTip text={isProtected ? "已鎖定：無法刪除此帳戶（點擊解鎖）" : "未鎖定：點擊鎖定以防止刪除"}>
-                  <button onClick={() => toggleProtect(acct.key)}
-                    style={{ background: "none", border: "none", cursor: "pointer",
-                      fontSize: "0.78rem", padding: "0 4px", opacity: isProtected ? 1 : 0.35,
-                      color: isProtected ? "var(--teal)" : "var(--dim)" }}>
-                    {isProtected ? "🔒" : "🔓"}
-                  </button>
-                </LockTip>
-              )}
-            </div>
-            <div style={{ display: isActive && pnlTab === 1 ? "none" : "block" }}>
-              <AccountPnL account={acct.key} currency={acct.currency} refreshKey={refreshKey} />
-            </div>
-            {isActive && pnlTab === 1 && (
-              <ManageTab
-                account={acct.key}
-                currency={acct.currency}
-                positions={portfolio[acct.key]?.positions ?? {}}
-                onRefresh={loadPortfolio}
-                useMock={useMock}
-              />
+              </LockTip>
             )}
           </div>
-        );
-      })}
+          <div style={{ display: pnlTab === 1 ? "none" : "block" }}>
+            <AccountPnL account={activeAcct.key} currency={activeAcct.currency} refreshKey={refreshKey} />
+          </div>
+          {pnlTab === 1 && (
+            <ManageTab
+              account={activeAcct.key}
+              currency={activeAcct.currency}
+              positions={portfolio[activeAcct.key]?.positions ?? {}}
+              onRefresh={loadPortfolio}
+              useMock={useMock}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
