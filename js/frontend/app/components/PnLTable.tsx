@@ -347,7 +347,7 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     const styles: React.CSSProperties = {};
     // This column owns a divider: borderRight + paddingRight
     if (dividers.has(cols[idx].key)) {
-      const pr = cols[idx].key === "ticker" ? "5px" : "24px";
+      const pr = cols[idx].key === "ticker" ? "10px" : "32px";
       styles.borderRight = "2px solid rgba(30,207,214,0.4)";
       styles.paddingRight = pr;
     }
@@ -463,12 +463,14 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
                 return (
                   <th
                     key={c.key}
-                    className={ss.col === c.key ? "active" : ""}
+                    className={`${ss.col === c.key ? "active" : ""}${dividers.has(c.key) ? " th-has-divider" : ""}${TOOLTIPS[c.key] ? " th-has-tip" : ""}`}
                     onClick={() => sortable && onHeaderClick(c.key)}
                     style={{ cursor: sortable ? "pointer" : "default", ...divStyle(idx) }}
                   >
-                    {c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}
-                    {TOOLTIPS[c.key] && <ColTooltip text={TOOLTIPS[c.key]!} />}
+                    <span className="pnl-th-content">
+                      <span>{c.label}{ss.col === c.key ? (ss.dir === "asc" ? " ↑" : " ↓") : ""}</span>
+                      {TOOLTIPS[c.key] && <ColTooltip text={TOOLTIPS[c.key]!} />}
+                    </span>
                   </th>
                 );
               })}

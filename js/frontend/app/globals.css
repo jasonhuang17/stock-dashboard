@@ -329,6 +329,20 @@ html, body {
 }
 .pnl-table th:first-child { text-align: left; }
 .pnl-table th:hover, .pnl-table th.active { color: var(--teal); }
+.pnl-th-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.pnl-table th:first-child .pnl-th-content {
+  justify-content: flex-start;
+}
+.pnl-table th.th-has-divider.th-has-tip .pnl-th-content {
+  padding-right: 2px;
+}
 .pnl-table td {
   padding: 7px 10px;
   text-align: right;
