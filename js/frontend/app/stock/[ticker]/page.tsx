@@ -125,7 +125,24 @@ export default function StockPage() {
   const bars = data?.bars ?? [];
   const interval = data?.interval ?? "1d";
   const sessionBoundaries: SessionBoundary[] = data?.session_boundaries ?? [];
-  const closes = bars.map(b => b.c).filter((c): c is number => c !== null);
+  const twentyFourHourStart = period === "1d" && nowMs != null ? nowMs - 86_400_000 : null;
+  const twentyFourHourEnd = period === "1d" && nowMs != null ? nowMs : null;
+  const visibleBars = twentyFourHourStart != null && twentyFourHourEnd != null
+    ? bars.filter(b => b.t >= twentyFourHourStart && b.t <= twentyFourHourEnd)
+    : bars;
+  const visibleSessionBoundaries = twentyFourHourStart != null && twentyFourHourEnd != null
+    ? sessionBoundaries
+        .map(sb => ({
+          open: sb.open,
+          close: sb.close,
+        }))
+        .filter(sb =>
+          (sb.open >= twentyFourHourStart && sb.open <= twentyFourHourEnd) ||
+          (sb.close != null && sb.close >= twentyFourHourStart && sb.close <= twentyFourHourEnd) ||
+          (sb.open < twentyFourHourStart && (sb.close ?? sb.open) > twentyFourHourEnd)
+        )
+    : sessionBoundaries;
+  const closes = visibleBars.map(b => b.c).filter((c): c is number => c !== null);
   const first = closes[0] ?? 0;
   const last = closes[closes.length - 1] ?? 0;
   const change = last - first;
@@ -133,7 +150,7 @@ export default function StockPage() {
   const isPos = change >= 0;
   const lineColor = isPos ? "#C05640" : "#3DAA70";
 
-  const chartData = bars.map(b => ({
+  const chartData = visibleBars.map(b => ({
     t: b.t, c: b.c,
     gain: b.c !== null && b.c >= first ? b.c : first,
     loss: b.c !== null && b.c < first  ? b.c : first,
@@ -141,30 +158,30 @@ export default function StockPage() {
   }));
 
   // Compute non-session (pre/post market) shaded zones for rendering
-  const isSingleDay = sessionBoundaries.length === 1;
+  const isSingleDay = visibleSessionBoundaries.length === 1;
   const nonSessionZones: { x1: number; x2: number; label?: string }[] = [];
-  if (chartData.length > 0 && sessionBoundaries.length > 0) {
+  if (chartData.length > 0 && visibleSessionBoundaries.length > 0) {
     const cStart = chartData[0].t;
     const cEnd = chartData[chartData.length - 1].t;
-    if (sessionBoundaries[0].open > cStart)
-      nonSessionZones.push({ x1: cStart, x2: sessionBoundaries[0].open, label: isSingleDay ? "盤前" : undefined });
-    for (let i = 0; i < sessionBoundaries.length - 1; i++) {
-      const c = sessionBoundaries[i].close;
-      if (c != null) nonSessionZones.push({ x1: c, x2: sessionBoundaries[i + 1].open });
+    if (visibleSessionBoundaries[0].open > cStart)
+      nonSessionZones.push({ x1: cStart, x2: visibleSessionBoundaries[0].open, label: isSingleDay ? "盤前" : undefined });
+    for (let i = 0; i < visibleSessionBoundaries.length - 1; i++) {
+      const c = visibleSessionBoundaries[i].close;
+      if (c != null) nonSessionZones.push({ x1: c, x2: visibleSessionBoundaries[i + 1].open });
     }
-    const lc = sessionBoundaries[sessionBoundaries.length - 1].close;
+    const lc = visibleSessionBoundaries[visibleSessionBoundaries.length - 1].close;
     if (lc != null && lc < cEnd)
       nonSessionZones.push({ x1: lc, x2: cEnd, label: isSingleDay ? "盤後" : undefined });
   }
 
   // Fix x-axis domain: intra → session open/close; 1d → rolling 24h ending now
   const xDomainStart: number | "dataMin" =
-    period === "intra" && sessionBoundaries.length > 0 ? sessionBoundaries[0].open :
-    period === "1d" && nowMs != null ? nowMs - 86_400_000 : "dataMin";
+    period === "intra" && visibleSessionBoundaries.length > 0 ? visibleSessionBoundaries[0].open :
+    period === "1d" && twentyFourHourStart != null ? twentyFourHourStart : "dataMin";
   const xDomainEnd: number | "dataMax" =
-    period === "intra" && sessionBoundaries.length > 0 && sessionBoundaries[0].close != null
-      ? sessionBoundaries[0].close :
-    period === "1d" && nowMs != null ? nowMs : "dataMax";
+    period === "intra" && visibleSessionBoundaries.length > 0 && visibleSessionBoundaries[0].close != null
+      ? visibleSessionBoundaries[0].close :
+    period === "1d" && twentyFourHourEnd != null ? twentyFourHourEnd : "dataMax";
 
   return (
     <div style={{ padding: "1rem 2rem", minHeight: "100vh" }}>
@@ -239,16 +256,17 @@ export default function StockPage() {
 
       {loading && <div style={{ color: "var(--dim)", fontFamily: "Courier New", padding: 40 }}>載入中… <span className="spinner" /></div>}
 
-      {!loading && bars.length === 0 && !(period === "intra" && !selectedDate) && (
+      {!loading && visibleBars.length === 0 && !(period === "intra" && !selectedDate) && (
         <div style={{ color: "var(--dim)", fontFamily: "Courier New", padding: 40 }}>無法取得 {ticker} 的歷史資料</div>
       )}
 
-      {!loading && bars.length > 0 && (
+      {!loading && visibleBars.length > 0 && (
         <>
           <ResponsiveContainer width="100%" height={340}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(8,120,164,0.12)" vertical={false} />
               <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]}
+                allowDataOverflow
                 tick={{ fill: "#6899b8", fontSize: 10 }} tickFormatter={t => fmtDate(t, interval, period)}
                 tickCount={8} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: "#6899b8", fontSize: 10 }}
@@ -287,7 +305,7 @@ export default function StockPage() {
                   label={z.label ? { value: z.label, position: "insideTopLeft", fontSize: 9, fill: "rgba(237,209,112,0.55)" } : undefined} />
               ))}
               {/* Session open/close lines (labels only for single-day) */}
-              {sessionBoundaries.map((sb, i) => (
+              {visibleSessionBoundaries.map((sb, i) => (
                 <React.Fragment key={`sb-${i}`}>
                   <ReferenceLine x={sb.open} stroke="rgba(30,207,214,0.28)" strokeDasharray="3 3"
                     label={isSingleDay ? { value: "開盤", position: "insideTopRight", fontSize: 9, fill: "rgba(30,207,214,0.6)" } : undefined} />
@@ -305,10 +323,10 @@ export default function StockPage() {
           </ResponsiveContainer>
 
           {/* Volume chart */}
-          {bars.some(b => b.v !== null) && (
+          {visibleBars.some(b => b.v !== null) && (
             <ResponsiveContainer width="100%" height={80}>
               <ComposedChart data={chartData} margin={{ top: 0, right: 16, bottom: 8, left: 8 }}>
-                <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]} hide />
+                <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]} allowDataOverflow hide />
                 <YAxis tick={{ fill: "#6899b8", fontSize: 9 }} width={60}
                   tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v)} />
                 <Tooltip
