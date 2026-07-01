@@ -16,7 +16,7 @@ type SessionBoundary = { open: number; close?: number };
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: "intra", label: "盤中" },
-  { key: "1d", label: "1日" }, { key: "2d", label: "2日" },
+  { key: "1d", label: "24H" }, { key: "2d", label: "2日" },
   { key: "3d", label: "3日" }, { key: "4d", label: "4日" }, { key: "5d", label: "5日" },
   { key: "1w", label: "1週" }, { key: "1m", label: "1月" }, { key: "3m", label: "3月" },
   { key: "ytd", label: "YTD" }, { key: "1y", label: "1年" }, { key: "5y", label: "5年" },
@@ -29,8 +29,10 @@ function fmtTradingDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} (${days[d.getDay()]})`;
 }
 
-function fmtDate(t: number, interval: string): string {
+function fmtDate(t: number, interval: string, period?: Period): string {
   const d = new Date(t);
+  if (period === "1d" && interval === "1m")
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
   if (interval === "1m") return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
   if (interval === "15m") return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
   if (interval === "1wk" || interval === "1mo") return `${d.getFullYear()}/${d.getMonth() + 1}`;
@@ -247,7 +249,7 @@ export default function StockPage() {
             <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(8,120,164,0.12)" vertical={false} />
               <XAxis dataKey="t" type="number" domain={[xDomainStart, xDomainEnd]}
-                tick={{ fill: "#6899b8", fontSize: 10 }} tickFormatter={t => fmtDate(t, interval)}
+                tick={{ fill: "#6899b8", fontSize: 10 }} tickFormatter={t => fmtDate(t, interval, period)}
                 tickCount={8} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: "#6899b8", fontSize: 10 }}
                 tickFormatter={v => v.toFixed(2)} width={60} />
@@ -312,7 +314,7 @@ export default function StockPage() {
                 <Tooltip
                   contentStyle={{ background: "#001d3a", border: "1px solid rgba(8,120,164,0.4)", fontFamily: "Courier New", fontSize: 11 }}
                   labelStyle={{ color: "#1ECFD6" }}
-                  labelFormatter={t => fmtDate(t as number, interval)}
+                  labelFormatter={t => period === "1d" ? fmtDateFull(t as number, interval) : fmtDate(t as number, interval)}
                   formatter={(v: unknown) => {
                     const n = v as number;
                     return [n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : String(n), "成交量"];
