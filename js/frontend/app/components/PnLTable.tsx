@@ -341,19 +341,19 @@ export function PnLTable({ rows, currency, account = "", label }: { rows: Portfo
     ? staleMinutes < 60 ? `${staleMinutes} 分鐘前` : `${Math.floor(staleMinutes / 60)} 小時前`
     : null;
 
-  // Divider line: borderRight on the divider column with extra paddingRight so the line sits
-  // closer to the right column (more space on the left side of the line).
+  // Divider line: borderRight on the divider column. Keep padding on both sides
+  // so narrow mobile tables do not let numbers visually collide with the line.
   const divStyle = (idx: number): React.CSSProperties => {
     const styles: React.CSSProperties = {};
     // This column owns a divider: borderRight + paddingRight
     if (dividers.has(cols[idx].key)) {
-      const pr = cols[idx].key === "ticker" ? "10px" : "32px";
+      const pr = cols[idx].key === "ticker" ? "14px" : "36px";
       styles.borderRight = "2px solid rgba(30,207,214,0.4)";
       styles.paddingRight = pr;
     }
-    // Previous column has a non-ticker divider: collapse left padding to 0
+    // Previous column has a non-ticker divider: keep a left gutter after the line.
     if (idx > 0 && dividers.has(cols[idx - 1].key) && cols[idx - 1].key !== "ticker") {
-      styles.paddingLeft = "0px";
+      styles.paddingLeft = "12px";
     }
     return styles;
   };
