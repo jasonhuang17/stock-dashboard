@@ -3,6 +3,7 @@ py/
 __pycache__/
 *.pyc
 .DS_Store
+.codegraph/
 js/backend/quote_log.jsonl
 js/backend/portfolio_log.jsonl
 js/backend/user_data_log.jsonl
