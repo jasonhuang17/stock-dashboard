@@ -52,22 +52,31 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
   const [refreshing, setRefreshing] = useState(false);
   const [showAH, setShowAH] = useState(false);
 
-  const fetchRows = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const [r, ah] = await Promise.all([
-        api.portfolioRows(account),
-        api.portfolioPremarketRows(account),
-      ]);
-      setRows(r);
-      setAhRows(ah);
-    } catch { /* silent */ }
-    setLoading(false);
-    setRefreshing(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setRefreshing(true);
+      try {
+        const [r, ah] = await Promise.all([
+          api.portfolioRows(account),
+          api.portfolioPremarketRows(account),
+        ]);
+        if (cancelled) return;
+        setRows(r);
+        setAhRows(ah);
+      } catch {
+        if (cancelled) return;
+        setRows([]);
+        setAhRows([]);
+      }
+      if (!cancelled) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+    run();
+    return () => { cancelled = true; };
   }, [account, refreshKey]);
-
-  useEffect(() => { fetchRows(); }, [fetchRows]);
 
   const totalToday     = rows.reduce((s, r) => s + (r.today_gain ?? 0), 0);
   const totalUnreal    = rows.reduce((s, r) => s + (r.unreal_gain ?? 0), 0);
@@ -619,13 +628,16 @@ function OverallTab({ portfolio, refreshKey, useMock }: { portfolio: Portfolio; 
   }));
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all(accounts.map(a => api.portfolioRows(a.key).catch(() => [] as PortfolioRow[])))
       .then(results => {
+        if (cancelled) return;
         const map: Record<string, PortfolioRow[]> = {};
         accounts.forEach((a, i) => { map[a.key] = results[i]; });
         setRowMap(map);
         setLoading(false);
       });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolio, refreshKey]);
 

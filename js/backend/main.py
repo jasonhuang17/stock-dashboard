@@ -1193,12 +1193,18 @@ def get_portfolio():
 
 @app.get("/api/portfolio/{account}/rows")
 def get_rows(account: str):
-    return _portfolio_rows(account)
+    try:
+        return _portfolio_rows(account)
+    except Exception:
+        return []
 
 
 @app.get("/api/portfolio/{account}/premarket-rows")
 def get_premarket_rows(account: str):
-    return _portfolio_premarket_rows(account)
+    try:
+        return _portfolio_premarket_rows(account)
+    except Exception:
+        return []
 
 
 class PositionBody(BaseModel):
