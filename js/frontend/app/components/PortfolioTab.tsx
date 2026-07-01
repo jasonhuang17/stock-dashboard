@@ -173,41 +173,41 @@ function AccountPnL({ account, currency, refreshKey }: { account: string; curren
   return (
     <div>
       {hasData && (
-        <div className="summary-bar" style={{ position: "relative" }}>
+        <div className="summary-bar account-summary-bar" style={{ position: "relative" }}>
           {refreshing && (
             <span style={{ position: "absolute", top: 6, right: 8, fontSize: "0.65rem", color: "var(--dim)" }}>
               <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
             </span>
           )}
-          <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-            <div>
+          <div className="summary-cluster">
+            <div className="summary-metric">
               <div className="summary-label">今日損益</div>
-              <div className={`summary-value ${totalToday >= 0 ? "pos" : "neg"}`} style={{ fontSize: "1.15rem" }}>{fmtMoney(totalToday, currency)}</div>
+              <div className={`summary-value summary-value-primary ${totalToday >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalToday, currency)}</div>
             </div>
             {todayPct !== null && (
-              <div>
+              <div className="summary-metric">
                 <div className="summary-label">今日 %</div>
-                <div className={`summary-value ${todayPct >= 0 ? "pos" : "neg"}`} style={{ fontSize: "1.15rem" }}>{fmtPct(todayPct)}</div>
+                <div className={`summary-value summary-value-primary ${todayPct >= 0 ? "pos" : "neg"}`}>{fmtPct(todayPct)}</div>
               </div>
             )}
           </div>
-          <div style={{ display: "flex", gap: 20, borderRight: "1px solid rgba(8,120,164,0.3)", paddingRight: 24 }}>
-            <div>
+          <div className="summary-cluster">
+            <div className="summary-metric">
               <div className="summary-label">未實現損益</div>
               <div className={`summary-value ${totalUnreal >= 0 ? "pos" : "neg"}`}>{fmtMoney(totalUnreal, currency)}</div>
             </div>
             {unrealPct !== null && (
-              <div>
+              <div className="summary-metric">
                 <div className="summary-label">未實現 %</div>
                 <div className={`summary-value ${unrealPct >= 0 ? "pos" : "neg"}`}>{fmtPct(unrealPct)}</div>
               </div>
             )}
           </div>
-          <div>
+          <div className="summary-metric">
             <div className="summary-label">總成本</div>
             <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(totalCostBasis, currency)}</div>
           </div>
-          <div>
+          <div className="summary-metric">
             <div className="summary-label">總市值</div>
             <div className="summary-value" style={{ color: "var(--text)" }}>{fmtMoney(totalMV, currency)}</div>
           </div>
