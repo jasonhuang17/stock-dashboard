@@ -335,6 +335,7 @@ html, body {
   border-bottom: 1px solid rgba(8,120,164,0.1);
 }
 .pnl-table td:first-child { text-align: left; color: var(--teal); font-weight: 700; }
+.pnl-table td:not(:first-child) { white-space: nowrap; }
 .pnl-table tr:hover td { background: rgba(8,120,164,0.06); }
 .pnl-table tfoot td {
   font-weight: 700;
